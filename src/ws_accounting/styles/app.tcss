@@ -1,0 +1,36 @@
+/* Global application styles for ws-accounting. */
+
+Screen {
+    background: $background;
+}
+
+.compact-only {
+    display: block;
+}
+.enhanced-only {
+    display: none;
+}
+
+.section-title {
+    text-style: bold;
+    margin-bottom: 1;
+    color: $text;
+}
+
+.card {
+    border: round $primary;
+    padding: 1 2;
+    margin: 0 1;
+}
+
+.amount-positive {
+    color: $success;
+}
+
+.amount-negative {
+    color: $error;
+}
+
+.amount-warning {
+    color: $warning;
+}

@@ -1,0 +1,6 @@
+/* Settings screen styles. */
+
+#settings-container {
+    layout: vertical;
+    padding: 1;
+}

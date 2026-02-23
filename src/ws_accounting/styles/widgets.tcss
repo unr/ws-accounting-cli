@@ -1,0 +1,6 @@
+/* Shared widget styles. */
+
+.widget-label {
+    text-style: bold;
+    margin-bottom: 1;
+}

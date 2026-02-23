@@ -1,0 +1,6 @@
+/* Reports screen styles. */
+
+#reports-container {
+    layout: vertical;
+    padding: 1;
+}

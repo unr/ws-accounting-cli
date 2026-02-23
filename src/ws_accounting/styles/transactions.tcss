@@ -1,0 +1,6 @@
+/* Transactions screen styles. */
+
+#transactions-container {
+    layout: vertical;
+    padding: 1;
+}

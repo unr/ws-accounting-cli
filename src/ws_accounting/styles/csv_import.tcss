@@ -1,0 +1,6 @@
+/* CSV Import screen styles. */
+
+#csv-import-container {
+    layout: vertical;
+    padding: 1;
+}

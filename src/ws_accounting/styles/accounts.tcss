@@ -1,0 +1,6 @@
+/* Accounts screen styles. */
+
+#accounts-container {
+    layout: vertical;
+    padding: 1;
+}

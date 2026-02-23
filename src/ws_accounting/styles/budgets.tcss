@@ -1,0 +1,6 @@
+/* Budgets screen styles. */
+
+#budgets-container {
+    layout: vertical;
+    padding: 1;
+}

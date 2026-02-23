@@ -1,0 +1,8 @@
+/* Dashboard screen styles. */
+
+#dashboard-container {
+    layout: grid;
+    grid-size: 2;
+    grid-gutter: 1;
+    padding: 1;
+}

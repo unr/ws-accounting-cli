@@ -1,0 +1,7 @@
+/* Onboarding screen styles. */
+
+#onboarding-container {
+    layout: vertical;
+    padding: 1;
+    align: center middle;
+}

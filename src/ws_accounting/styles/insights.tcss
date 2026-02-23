@@ -1,0 +1,6 @@
+/* AI Insights screen styles. */
+
+#insights-container {
+    layout: vertical;
+    padding: 1;
+}
