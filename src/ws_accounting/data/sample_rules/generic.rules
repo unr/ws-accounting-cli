@@ -1,0 +1,10 @@
+; Generic bank CSV rules
+; Adjust fields to match your bank's CSV format
+
+skip 1
+
+fields date, description, amount
+
+date-format %Y-%m-%d
+currency $
+account1 assets:bank:checking
