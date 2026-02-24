@@ -14,7 +14,15 @@ from ws_accounting.config.paths import database_path, default_journal_dir
 from ws_accounting.config.settings import AppConfig
 from ws_accounting.core.hledger import HLedgerGateway
 from ws_accounting.db.database import Database
+from ws_accounting.screens.accounts import AccountsScreen
+from ws_accounting.screens.budgets import BudgetsScreen
+from ws_accounting.screens.csv_import import CSVImportScreen
+from ws_accounting.screens.dashboard import DashboardScreen
+from ws_accounting.screens.insights import InsightsScreen
 from ws_accounting.screens.onboarding import OnboardingScreen
+from ws_accounting.screens.reports import ReportsScreen
+from ws_accounting.screens.settings import SettingsScreen
+from ws_accounting.screens.transactions import TransactionsScreen
 from ws_accounting.theme import ALL_THEMES, financial_dark, financial_light
 from ws_accounting.widgets.nav_header import NavHeader
 
@@ -40,16 +48,15 @@ class WsAccountingApp(App):
     CSS_PATH = "styles/app.tcss"
 
     # MODES -- each screen is a mode, preserving state when switching.
-    # String paths enable lazy loading (screens imported on first access).
     MODES = {
-        "dashboard": "ws_accounting.screens.dashboard.DashboardScreen",
-        "transactions": "ws_accounting.screens.transactions.TransactionsScreen",
-        "csv_import": "ws_accounting.screens.csv_import.CSVImportScreen",
-        "budgets": "ws_accounting.screens.budgets.BudgetsScreen",
-        "reports": "ws_accounting.screens.reports.ReportsScreen",
-        "insights": "ws_accounting.screens.insights.InsightsScreen",
-        "accounts": "ws_accounting.screens.accounts.AccountsScreen",
-        "settings": "ws_accounting.screens.settings.SettingsScreen",
+        "dashboard": DashboardScreen,
+        "transactions": TransactionsScreen,
+        "csv_import": CSVImportScreen,
+        "budgets": BudgetsScreen,
+        "reports": ReportsScreen,
+        "insights": InsightsScreen,
+        "accounts": AccountsScreen,
+        "settings": SettingsScreen,
     }
 
     DEFAULT_MODE = "dashboard"

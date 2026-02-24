@@ -42,6 +42,7 @@ OnboardingScreen {
 .step-description {
     color: $text-muted;
     margin-bottom: 1;
+    width: 100%;
 }
 
 .field-label {
