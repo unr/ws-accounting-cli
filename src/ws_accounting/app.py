@@ -77,6 +77,7 @@ class WsAccountingApp(App):
         Binding("question_mark", "help", "Help", show=False),
         Binding("n", "new_transaction", "New Txn", show=False),
         Binding("slash", "focus_search", "Search", show=False),
+        Binding("f12", "dev_screenshot", "Screenshot", show=False),
     ]
 
     def __init__(self) -> None:
@@ -243,6 +244,17 @@ class WsAccountingApp(App):
     def action_focus_search(self) -> None:
         """Placeholder for search focus."""
         self.notify("Search -- coming soon")
+
+    def action_dev_screenshot(self) -> None:
+        """Save a screenshot for dev feedback."""
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = Path("dev/screenshots")
+        path.mkdir(parents=True, exist_ok=True)
+        filename = f"user_{timestamp}.svg"
+        self.save_screenshot(filename=filename, path=str(path))
+        self.notify(f"Screenshot saved: dev/screenshots/{filename}")
 
     # ---------------------------------------------------------------
     # Lifecycle

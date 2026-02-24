@@ -16,10 +16,8 @@ class CategoryPicker(Input):
 
     def __init__(self, categories: list[str] | None = None, **kwargs) -> None:
         self._categories = categories or DEFAULT_CATEGORIES
-        super().__init__(
-            placeholder="Type to search categories...",
-            **kwargs,
-        )
+        kwargs.setdefault("placeholder", "Type to search categories...")
+        super().__init__(**kwargs)
 
     @property
     def categories(self) -> list[str]:

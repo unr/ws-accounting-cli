@@ -24,14 +24,14 @@ class ImportStepper(Static):
         self._current = 0
 
     def on_mount(self) -> None:
-        self._render()
+        self._refresh_steps()
 
     def set_step(self, step: int) -> None:
         """Set the current step (0-indexed)."""
         self._current = max(0, min(step, len(self.STEPS) - 1))
-        self._render()
+        self._refresh_steps()
 
-    def _render(self) -> None:
+    def _refresh_steps(self) -> None:
         parts = []
         for i, name in enumerate(self.STEPS):
             if i < self._current:
