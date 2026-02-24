@@ -8,7 +8,7 @@ import logging
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Label, Static
+from textual.widgets import Button, Footer, Label, Static
 
 from ws_accounting.core.hledger import (
     HLedgerError,
@@ -20,6 +20,7 @@ from ws_accounting.core.parser import (
     parse_register,
 )
 from ws_accounting.widgets.account_tree import AccountTree
+from ws_accounting.widgets.nav_header import NavHeader
 
 log = logging.getLogger(__name__)
 
@@ -31,14 +32,14 @@ class AccountsScreen(Screen):
 
     BINDINGS = []
 
-    def __init__(
-        self, gateway: HLedgerGateway | None = None, **kwargs
-    ):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._gateway = gateway
+        self._gateway: HLedgerGateway | None = None
         self._selected_account: str | None = None
 
     def compose(self) -> ComposeResult:
+        yield NavHeader()
+
         with Horizontal(id="accounts-layout"):
             # Left pane: account tree
             with Vertical(id="accounts-tree-pane"):
@@ -83,8 +84,14 @@ class AccountsScreen(Screen):
             classes="muted-text",
         )
 
+        yield Footer()
+
     def on_mount(self) -> None:
         """Load account list when screen is mounted."""
+        self.query_one(NavHeader).set_active("accounts")
+        # Grab the gateway from the app
+        if self._gateway is None and hasattr(self.app, "gateway"):
+            self._gateway = self.app.gateway
         if self._gateway is not None:
             self._load_accounts()
 

@@ -19,6 +19,7 @@ from textual.widgets import (
     Button,
     ContentSwitcher,
     DataTable,
+    Footer,
     Input,
     Label,
     Select,
@@ -49,6 +50,7 @@ from ws_accounting.core.models import (
 )
 from ws_accounting.widgets.category_picker import CategoryPicker
 from ws_accounting.widgets.import_stepper import ImportStepper
+from ws_accounting.widgets.nav_header import NavHeader
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +80,7 @@ class CSVImportScreen(Screen):
         self._gateway = gateway
 
     def compose(self) -> ComposeResult:
+        yield NavHeader()
         yield ImportStepper(id="import-stepper")
         with ContentSwitcher(
             id="import-switcher", initial="step-file"
@@ -230,8 +233,14 @@ class CSVImportScreen(Screen):
                         id="btn-done",
                     )
 
+        yield Footer()
+
     def on_mount(self) -> None:
         """Initialize the review table columns."""
+        self.query_one(NavHeader).set_active("csv_import")
+        # Grab the gateway from the app if not already set
+        if self._gateway is None and hasattr(self.app, "gateway"):
+            self._gateway = self.app.gateway
         table = self.query_one("#review-table", DataTable)
         table.add_columns(
             "Row",
@@ -789,7 +798,7 @@ class CSVImportScreen(Screen):
     def _handle_done(self) -> None:
         """Return to the dashboard."""
         try:
-            self.app.action_switch_screen("dashboard")
+            self.app.switch_mode("dashboard")
         except Exception:
             pass
 

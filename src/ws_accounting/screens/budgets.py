@@ -38,6 +38,7 @@ from ws_accounting.db.queries import (
     upsert_budget,
 )
 from ws_accounting.widgets.budget_bar import BudgetBar
+from ws_accounting.widgets.nav_header import NavHeader
 
 log = logging.getLogger(__name__)
 
@@ -306,13 +307,9 @@ class BudgetsScreen(Screen):
         ),
     ]
 
-    def __init__(
-        self,
-        db: Database | None = None,
-        **kwargs,
-    ) -> None:
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._db = db
+        self._db: Database | None = None
         self._month: str = _current_month()
         self._budgets: list[Budget] = []
         self._budget_statuses: list[BudgetStatus] = []
@@ -320,6 +317,8 @@ class BudgetsScreen(Screen):
         self._recurring: list[RecurringTransaction] = []
 
     def compose(self) -> ComposeResult:
+        yield NavHeader()
+
         # Header row: title + month navigation
         with Horizontal(id="budgets-header"):
             yield Static(
@@ -387,6 +386,10 @@ class BudgetsScreen(Screen):
 
     def on_mount(self) -> None:
         """Load data on mount."""
+        self.query_one(NavHeader).set_active("budgets")
+        # Grab the database from the app if not already set
+        if self._db is None and hasattr(self.app, "database"):
+            self._db = self.app.database
         self._load_data()
 
     def set_database(self, db: Database) -> None:

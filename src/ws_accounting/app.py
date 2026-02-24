@@ -7,28 +7,20 @@ from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Footer, Tabs
+from textual.reactive import reactive
+from textual.widgets import Footer
 
-from ws_accounting.config.paths import database_path
+from ws_accounting.config.paths import database_path, default_journal_dir
 from ws_accounting.config.settings import AppConfig
 from ws_accounting.core.hledger import HLedgerGateway
 from ws_accounting.db.database import Database
-from ws_accounting.screens.accounts import AccountsScreen
-from ws_accounting.screens.budgets import BudgetsScreen
-from ws_accounting.screens.csv_import import CSVImportScreen
-from ws_accounting.screens.dashboard import DashboardScreen
-from ws_accounting.screens.insights import InsightsScreen
-from ws_accounting.screens.onboarding import OnboardingScreen
-from ws_accounting.screens.reports import ReportsScreen
-from ws_accounting.screens.settings import SettingsScreen
-from ws_accounting.screens.transactions import TransactionsScreen
-from ws_accounting.theme import financial_dark, financial_light
+from ws_accounting.theme import ALL_THEMES, financial_dark, financial_light
 from ws_accounting.widgets.nav_header import NavHeader
 
 log = logging.getLogger(__name__)
 
-# Map tab IDs to screen names
-TAB_TO_SCREEN: dict[str, str] = {
+# Map tab IDs (from NavHeader) to mode names
+TAB_TO_MODE: dict[str, str] = {
     "tab-dashboard": "dashboard",
     "tab-transactions": "transactions",
     "tab-csv_import": "csv_import",
@@ -46,87 +38,51 @@ class WSAccountingApp(App):
     TITLE = "ws-accounting"
     CSS_PATH = "styles/app.tcss"
 
-    SCREENS = {
-        "dashboard": DashboardScreen,
-        "transactions": TransactionsScreen,
-        "csv_import": CSVImportScreen,
-        "budgets": BudgetsScreen,
-        "reports": ReportsScreen,
-        "insights": InsightsScreen,
-        "accounts": AccountsScreen,
-        "settings": SettingsScreen,
-        "onboarding": OnboardingScreen,
+    # MODES -- each screen is a mode, preserving state when switching.
+    # String paths enable lazy loading (screens imported on first access).
+    MODES = {
+        "dashboard": "ws_accounting.screens.dashboard.DashboardScreen",
+        "transactions": "ws_accounting.screens.transactions.TransactionsScreen",
+        "csv_import": "ws_accounting.screens.csv_import.CSVImportScreen",
+        "budgets": "ws_accounting.screens.budgets.BudgetsScreen",
+        "reports": "ws_accounting.screens.reports.ReportsScreen",
+        "insights": "ws_accounting.screens.insights.InsightsScreen",
+        "accounts": "ws_accounting.screens.accounts.AccountsScreen",
+        "settings": "ws_accounting.screens.settings.SettingsScreen",
     }
 
+    DEFAULT_MODE = "dashboard"
+
+    # Shared reactive state -- screens can watch these
+    current_period = reactive("2026-02")
+    journal_modified = reactive(0)
+
     BINDINGS = [
-        Binding(
-            "ctrl+1",
-            "switch_screen('dashboard')",
-            "Dashboard",
-            show=False,
-        ),
-        Binding(
-            "ctrl+2",
-            "switch_screen('transactions')",
-            "Txns",
-            show=False,
-        ),
-        Binding(
-            "ctrl+3",
-            "switch_screen('csv_import')",
-            "Import",
-            show=False,
-        ),
-        Binding(
-            "ctrl+4",
-            "switch_screen('budgets')",
-            "Budget",
-            show=False,
-        ),
-        Binding(
-            "ctrl+5",
-            "switch_screen('reports')",
-            "Reports",
-            show=False,
-        ),
-        Binding(
-            "ctrl+6",
-            "switch_screen('insights')",
-            "AI",
-            show=False,
-        ),
-        Binding(
-            "ctrl+7",
-            "switch_screen('accounts')",
-            "Accounts",
-            show=False,
-        ),
-        Binding("q", "quit", "Quit"),
-        Binding(
-            "question_mark", "help", "Help", show=False
-        ),
-        Binding(
-            "n", "new_transaction", "New Txn", show=False
-        ),
-        Binding(
-            "slash", "focus_search", "Search", show=False
-        ),
+        Binding("ctrl+1", "switch_to('dashboard')", "Dashboard", show=False),
+        Binding("ctrl+2", "switch_to('transactions')", "Txns", show=False),
+        Binding("ctrl+3", "switch_to('csv_import')", "Import", show=False),
+        Binding("ctrl+4", "switch_to('budgets')", "Budget", show=False),
+        Binding("ctrl+5", "switch_to('reports')", "Reports", show=False),
+        Binding("ctrl+6", "switch_to('insights')", "AI", show=False),
+        Binding("ctrl+7", "switch_to('accounts')", "Accounts", show=False),
+        Binding("q", "quit_app", "Quit"),
+        Binding("question_mark", "help", "Help", show=False),
+        Binding("n", "new_transaction", "New Txn", show=False),
+        Binding("slash", "focus_search", "Search", show=False),
     ]
 
     def __init__(self) -> None:
         super().__init__()
-        self.register_theme(financial_dark)
-        self.register_theme(financial_light)
         self._config = AppConfig.load()
         self._db: Database | None = None
         self._gateway: HLedgerGateway | None = None
 
-    def compose(self) -> ComposeResult:
-        yield NavHeader()
-        yield Footer()
-
     def on_mount(self) -> None:
-        """Initialize services and navigate to the first screen."""
+        """Initialize services and apply theme."""
+        # Register custom themes
+        for theme in ALL_THEMES:
+            self.register_theme(theme)
+
         # Apply saved theme
         self.theme = self._config.theme
 
@@ -135,11 +91,6 @@ class WSAccountingApp(App):
 
         # Initialize hledger gateway
         self._init_gateway()
-
-        # Navigate to dashboard (or onboarding on first run)
-        if self._config.first_run:
-            self.push_screen("onboarding")
-        self.switch_screen("dashboard")
 
     def _init_database(self) -> None:
         """Create the database and run migrations."""
@@ -154,21 +105,28 @@ class WSAccountingApp(App):
         """Create the hledger gateway from config."""
         journal_path = self._config.journal_path
         if not journal_path:
-            # Fall back to default location
-            from ws_accounting.config.paths import (
-                default_journal_dir,
-            )
-
-            journal_path = str(
-                default_journal_dir() / "main.journal"
-            )
+            journal_path = str(default_journal_dir() / "main.journal")
         self._gateway = HLedgerGateway(
             journal_path=Path(journal_path),
         )
 
+    # ---------------------------------------------------------------
+    # Properties for screen access
+    # ---------------------------------------------------------------
+
+    @property
+    def config(self) -> AppConfig:
+        """The application configuration."""
+        return self._config
+
     @property
     def gateway(self) -> HLedgerGateway | None:
         """The hledger gateway instance."""
+        return self._gateway
+
+    @property
+    def hledger(self) -> HLedgerGateway | None:
+        """Alias for gateway -- used by dashboard."""
         return self._gateway
 
     @property
@@ -177,45 +135,55 @@ class WSAccountingApp(App):
         return self._db
 
     # ---------------------------------------------------------------
-    # Screen switching
+    # Mode / screen switching
     # ---------------------------------------------------------------
 
-    def action_switch_screen(self, screen_name: str) -> None:
-        """Switch to a named screen and update the nav tabs."""
-        self.switch_screen(screen_name)
-        self._sync_nav_tab(screen_name)
-        self._inject_gateway(screen_name)
+    def action_switch_to(self, mode: str) -> None:
+        """Switch to a named mode and update the nav tabs."""
+        self.switch_mode(mode)
+        self._sync_nav_tab(mode)
+        self._inject_gateway(mode)
 
-    def _sync_nav_tab(self, screen_name: str) -> None:
-        """Keep the NavHeader tabs in sync with the active screen."""
+    def _sync_nav_tab(self, mode_name: str) -> None:
+        """Keep the NavHeader tabs in sync with the active mode."""
         try:
-            nav = self.query_one(NavHeader)
-            nav.set_active(screen_name)
+            screen = self.screen
+            navs = screen.query(NavHeader)
+            for nav in navs:
+                nav.set_active(mode_name)
         except Exception:
             pass
 
-    def _inject_gateway(self, screen_name: str) -> None:
+    def _inject_gateway(self, mode_name: str) -> None:
         """Inject the hledger gateway into screens that need it."""
         if self._gateway is None:
             return
         try:
-            screen = self.get_screen(screen_name)
+            screen = self.screen
             if hasattr(screen, "set_gateway"):
                 screen.set_gateway(self._gateway)
         except Exception:
             pass
 
-    def on_tabs_changed(self, event: Tabs.Changed) -> None:
+    def on_tabs_changed(self, event) -> None:
         """Handle tab navigation from the NavHeader."""
+        from textual.widgets import Tabs
+
+        if not isinstance(event, Tabs.Changed):
+            return
         tab_id = event.tab.id if event.tab else None
-        if tab_id and tab_id in TAB_TO_SCREEN:
-            screen_name = TAB_TO_SCREEN[tab_id]
-            self.switch_screen(screen_name)
-            self._inject_gateway(screen_name)
+        if tab_id and tab_id in TAB_TO_MODE:
+            mode_name = TAB_TO_MODE[tab_id]
+            self.switch_mode(mode_name)
+            self._inject_gateway(mode_name)
 
     # ---------------------------------------------------------------
     # Actions
     # ---------------------------------------------------------------
+
+    def action_quit_app(self) -> None:
+        """Quit the application."""
+        self.exit()
 
     def action_help(self) -> None:
         """Show help information."""

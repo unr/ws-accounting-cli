@@ -12,6 +12,7 @@ from textual.containers import Container
 from textual.screen import Screen
 from textual.widgets import (
     DataTable,
+    Footer,
     Label,
     Static,
     TabbedContent,
@@ -25,6 +26,7 @@ from ws_accounting.core.hledger import (
     HLedgerNotFoundError,
 )
 from ws_accounting.core.parser import parse_amount, parse_balance_report
+from ws_accounting.widgets.nav_header import NavHeader
 from ws_accounting.widgets.period_selector import PeriodSelector
 
 log = logging.getLogger(__name__)
@@ -91,15 +93,13 @@ class ReportsScreen(Screen):
 
     BINDINGS = []
 
-    def __init__(
-        self,
-        gateway: HLedgerGateway | None = None,
-        **kwargs,
-    ):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._gateway = gateway
+        self._gateway: HLedgerGateway | None = None
 
     def compose(self) -> ComposeResult:
+        yield NavHeader()
+
         with Container(id="reports-container"):
             yield Label(
                 "Financial Reports",
@@ -152,8 +152,14 @@ class ReportsScreen(Screen):
                         classes="empty-state",
                     )
 
+        yield Footer()
+
     def on_mount(self) -> None:
         """Load initial data when the screen is mounted."""
+        self.query_one(NavHeader).set_active("reports")
+        # Grab the gateway from the app if not already set
+        if self._gateway is None and hasattr(self.app, "gateway"):
+            self._gateway = self.app.gateway
         # Set up the comparison DataTable columns
         table = self.query_one("#comparison-table", DataTable)
         table.add_columns(

@@ -34,6 +34,7 @@ from ws_accounting.core.models import (
     TransactionStatus,
 )
 from ws_accounting.core.parser import parse_register
+from ws_accounting.widgets.nav_header import NavHeader
 from ws_accounting.widgets.period_selector import PeriodSelector
 from ws_accounting.widgets.transaction_table import (
     TransactionTable,
@@ -363,13 +364,9 @@ class TransactionsScreen(Screen):
         ),
     ]
 
-    def __init__(
-        self,
-        gateway: HLedgerGateway | None = None,
-        **kwargs,
-    ) -> None:
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._gateway = gateway
+        self._gateway: HLedgerGateway | None = None
         self._all_transactions: list[Transaction] = []
         self._current_period: str = "thismonth"
         self._current_query: str = ""
@@ -379,6 +376,8 @@ class TransactionsScreen(Screen):
         self._search_timer_handle = None
 
     def compose(self) -> ComposeResult:
+        yield NavHeader()
+
         # Toolbar: search + filters
         with Horizontal(id="txn-toolbar"):
             yield Input(
@@ -432,8 +431,13 @@ class TransactionsScreen(Screen):
 
     def on_mount(self) -> None:
         """Initialize gateway from config if not provided."""
+        self.query_one(NavHeader).set_active("transactions")
         if self._gateway is None:
-            self._init_gateway()
+            # Try to get gateway from the app first
+            if hasattr(self.app, "gateway") and self.app.gateway:
+                self._gateway = self.app.gateway
+            else:
+                self._init_gateway()
         self._load_data()
 
     def set_gateway(self, gateway: HLedgerGateway) -> None:

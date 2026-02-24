@@ -20,6 +20,7 @@ from textual.widgets import (
 )
 
 from ws_accounting.config.settings import AppConfig
+from ws_accounting.widgets.nav_header import NavHeader
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ class SettingsScreen(Screen):
         self._config: AppConfig = AppConfig.load()
 
     def compose(self) -> ComposeResult:
+        yield NavHeader()
         yield Static("Settings", id="settings-title")
 
         with TabbedContent(id="settings-tabs"):
@@ -242,6 +244,7 @@ class SettingsScreen(Screen):
 
     def on_mount(self) -> None:
         """Reload config values into widgets on mount."""
+        self.query_one(NavHeader).set_active("settings")
         self._load_config_into_widgets()
 
     def _load_config_into_widgets(self) -> None:

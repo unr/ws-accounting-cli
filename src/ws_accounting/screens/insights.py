@@ -10,6 +10,7 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import (
     Button,
+    Footer,
     Label,
     LoadingIndicator,
     Markdown,
@@ -22,6 +23,7 @@ from ws_accounting.ai.insights import InsightsGenerator
 from ws_accounting.core.hledger import HLedgerGateway
 from ws_accounting.db.database import Database
 from ws_accounting.db.queries import get_cached_insights, get_setting
+from ws_accounting.widgets.nav_header import NavHeader
 
 log = logging.getLogger(__name__)
 
@@ -49,19 +51,16 @@ class InsightsScreen(Screen):
 
     BINDINGS = []
 
-    def __init__(
-        self,
-        gateway: HLedgerGateway | None = None,
-        db: Database | None = None,
-        **kwargs,
-    ):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._gateway = gateway
-        self._db = db
+        self._gateway: HLedgerGateway | None = None
+        self._db: Database | None = None
         self._current_period: str = ""
         self._generator: InsightsGenerator | None = None
 
     def compose(self) -> ComposeResult:
+        yield NavHeader()
+
         with Container(id="insights-container"):
             yield Label(
                 "AI Financial Insights",
@@ -136,8 +135,11 @@ class InsightsScreen(Screen):
                 classes="empty-state",
             )
 
+        yield Footer()
+
     def on_mount(self) -> None:
         """Initialize state when the screen is mounted."""
+        self.query_one(NavHeader).set_active("insights")
         self._current_period = self._default_period()
         self._init_services()
         self._check_and_display()
