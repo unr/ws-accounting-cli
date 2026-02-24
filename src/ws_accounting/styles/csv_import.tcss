@@ -1,6 +1,139 @@
 /* CSV Import screen styles. */
 
-#csv-import-container {
+CSVImportScreen {
     layout: vertical;
+}
+
+/* ── Stepper ───────────────────────────────────────────── */
+
+#import-stepper {
+    height: 3;
+    dock: top;
+    background: $surface;
+    border-bottom: solid $primary;
+}
+
+/* ── Content Switcher ──────────────────────────────────── */
+
+#import-switcher {
+    height: 1fr;
+    width: 1fr;
+}
+
+/* ── Step containers ───────────────────────────────────── */
+
+#step-file,
+#step-mapping,
+#step-review,
+#step-summary {
+    padding: 1 2;
+    height: 1fr;
+}
+
+.step-title {
+    text-style: bold;
+    margin-bottom: 1;
+    color: $text;
+}
+
+.step-description {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+.step-buttons {
+    height: auto;
+    dock: bottom;
+    padding: 1 0;
+    align: right middle;
+}
+
+.step-buttons Button {
+    margin-left: 1;
+}
+
+/* ── Step 1: File Selection ────────────────────────────── */
+
+#csv-path-input {
+    width: 1fr;
+    margin-bottom: 1;
+}
+
+.field-label {
+    margin-top: 1;
+    margin-bottom: 0;
+    color: $text;
+}
+
+#profile-select {
+    width: 1fr;
+    margin-bottom: 1;
+}
+
+.error-text {
+    color: $error;
+    margin-top: 1;
+}
+
+.info-text {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+/* ── Step 2: Column Mapping ────────────────────────────── */
+
+#mapping-fields {
+    height: auto;
+    padding: 1 0;
+}
+
+#mapping-fields Select {
+    width: 1fr;
+    margin-bottom: 1;
+}
+
+#mapping-fields CategoryPicker {
+    margin-bottom: 1;
+}
+
+#detected-info {
+    margin-bottom: 1;
+    border: round $panel;
     padding: 1;
+}
+
+/* ── Step 3: Review ────────────────────────────────────── */
+
+#review-actions {
+    height: auto;
+    padding: 0 0 1 0;
+    align: left middle;
+}
+
+#review-actions Button {
+    margin-right: 1;
+}
+
+#review-stats {
+    color: $text-muted;
+    margin-left: 2;
+    content-align: center middle;
+}
+
+#review-scroll {
+    height: 1fr;
+    border: round $panel;
+}
+
+#review-table {
+    height: 1fr;
+}
+
+/* ── Step 4: Summary ───────────────────────────────────── */
+
+.summary-card {
+    border: round $success;
+    padding: 2 4;
+    margin: 1 0;
+    text-align: center;
 }

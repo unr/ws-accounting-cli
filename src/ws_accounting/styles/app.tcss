@@ -46,7 +46,6 @@ Screen {
 
 /* Screens with placeholder content get centered layout */
 TransactionsScreen,
-CSVImportScreen,
 BudgetsScreen,
 ReportsScreen,
 InsightsScreen,
