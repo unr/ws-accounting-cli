@@ -1,0 +1,216 @@
+; Sample journal with 3 months of data for demo/onboarding
+; Period: December 2025 - February 2026
+
+include ../data/default_accounts.journal
+
+; === December 2025 ===
+
+2025-12-01 * Opening Balances
+    assets:checking                    $8,500.00
+    assets:savings                     $3,000.00
+    liabilities:credit card            $-450.00
+    equity:opening balances
+
+2025-12-01 * Employer | Salary
+    assets:checking                    $5,200.00
+    income:salary
+
+2025-12-03 * Whole Foods | Groceries
+    expenses:food:groceries              $125.40
+    assets:checking
+
+2025-12-05 * Shell Gas Station
+    expenses:transport:gas                $52.00
+    assets:checking
+
+2025-12-07 * Netflix
+    expenses:entertainment:subscriptions  $15.99
+    assets:checking
+
+2025-12-08 * Chipotle
+    expenses:food:dining                  $14.50
+    assets:checking
+
+2025-12-10 * Comcast
+    expenses:housing:internet             $79.99
+    assets:checking
+
+2025-12-12 * Trader Joe's | Groceries
+    expenses:food:groceries               $89.23
+    assets:checking
+
+2025-12-15 * Employer | Salary
+    assets:checking                    $5,200.00
+    income:salary
+
+2025-12-15 * Transfer to savings
+    assets:savings                       $500.00
+    assets:checking
+
+2025-12-17 * Amazon | Holiday gifts
+    expenses:gifts                       $156.78
+    liabilities:credit card
+
+2025-12-18 * Starbucks
+    expenses:food:coffee                   $6.75
+    assets:checking
+
+2025-12-20 * Target | Holiday shopping
+    expenses:shopping:household           $234.56
+    liabilities:credit card
+
+2025-12-22 * Landlord | Rent
+    expenses:housing:rent              $1,800.00
+    assets:checking
+
+2025-12-24 * PG&E | Utilities
+    expenses:housing:utilities            $145.30
+    assets:checking
+
+2025-12-28 * Spotify
+    expenses:entertainment:subscriptions   $9.99
+    assets:checking
+
+2025-12-30 * Credit card payment
+    liabilities:credit card              $450.00
+    assets:checking
+
+; === January 2026 ===
+
+2026-01-01 * Employer | Salary
+    assets:checking                    $5,200.00
+    income:salary
+
+2026-01-02 * Whole Foods | Groceries
+    expenses:food:groceries              $112.85
+    assets:checking
+
+2026-01-03 * Planet Fitness
+    expenses:personal:gym                 $25.00
+    assets:checking
+
+2026-01-05 * Shell Gas Station
+    expenses:transport:gas                $48.50
+    assets:checking
+
+2026-01-07 * Netflix
+    expenses:entertainment:subscriptions  $15.99
+    assets:checking
+
+2026-01-08 * Olive Garden
+    expenses:food:dining                  $45.60
+    assets:checking
+
+2026-01-10 * Comcast
+    expenses:housing:internet             $79.99
+    assets:checking
+
+2026-01-12 * Costco | Groceries
+    expenses:food:groceries              $198.34
+    assets:checking
+
+2026-01-15 * Employer | Salary
+    assets:checking                    $5,200.00
+    income:salary
+
+2026-01-15 * Transfer to savings
+    assets:savings                       $500.00
+    assets:checking
+
+2026-01-17 * Amazon | Electronics
+    expenses:shopping:electronics        $89.99
+    liabilities:credit card
+
+2026-01-18 * Starbucks
+    expenses:food:coffee                   $5.95
+    assets:checking
+
+2026-01-20 * Landlord | Rent
+    expenses:housing:rent              $1,800.00
+    assets:checking
+
+2026-01-22 * PG&E | Utilities
+    expenses:housing:utilities           $132.45
+    assets:checking
+
+2026-01-25 * Blue Shield | Health insurance
+    expenses:health:insurance            $350.00
+    assets:checking
+
+2026-01-28 * Spotify
+    expenses:entertainment:subscriptions   $9.99
+    assets:checking
+
+2026-01-30 * Credit card payment
+    liabilities:credit card              $300.00
+    assets:checking
+
+; === February 2026 ===
+
+2026-02-01 * Employer | Salary
+    assets:checking                    $5,200.00
+    income:salary
+
+2026-02-02 * Whole Foods | Groceries
+    expenses:food:groceries              $135.20
+    assets:checking
+
+2026-02-03 * Planet Fitness
+    expenses:personal:gym                 $25.00
+    assets:checking
+
+2026-02-05 * Chevron
+    expenses:transport:gas                $55.30
+    assets:checking
+
+2026-02-07 * Netflix
+    expenses:entertainment:subscriptions  $15.99
+    assets:checking
+
+2026-02-08 * Thai Kitchen
+    expenses:food:dining                  $32.80
+    assets:checking
+
+2026-02-10 * Comcast
+    expenses:housing:internet             $79.99
+    assets:checking
+
+2026-02-12 * Trader Joe's | Groceries
+    expenses:food:groceries               $95.67
+    assets:checking
+
+2026-02-14 * Flowers & Chocolate | Valentine's
+    expenses:gifts                        $85.00
+    assets:checking
+
+2026-02-15 * Employer | Salary
+    assets:checking                    $5,200.00
+    income:salary
+
+2026-02-15 * Transfer to savings
+    assets:savings                       $500.00
+    assets:checking
+
+2026-02-17 * Amazon | Books
+    expenses:shopping:household           $34.99
+    liabilities:credit card
+
+2026-02-18 * Starbucks
+    expenses:food:coffee                   $7.25
+    assets:checking
+
+2026-02-20 * Landlord | Rent
+    expenses:housing:rent              $1,800.00
+    assets:checking
+
+2026-02-22 * PG&E | Utilities
+    expenses:housing:utilities           $128.90
+    assets:checking
+
+2026-02-23 * Whole Foods | Groceries
+    expenses:food:groceries               $85.42
+    assets:checking
+
+2026-02-28 * Spotify
+    expenses:entertainment:subscriptions   $9.99
+    assets:checking

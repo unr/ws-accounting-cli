@@ -1,0 +1,60 @@
+; Default chart of accounts for ws-accounting
+; Commodity directive
+commodity $1,000.00
+
+; Asset accounts
+account assets
+account assets:checking
+account assets:savings
+account assets:cash
+
+; Liability accounts
+account liabilities
+account liabilities:credit card
+
+; Income accounts
+account income
+account income:salary
+account income:freelance
+account income:interest
+account income:other
+
+; Expense accounts
+account expenses
+account expenses:food
+account expenses:food:groceries
+account expenses:food:dining
+account expenses:food:coffee
+account expenses:housing
+account expenses:housing:rent
+account expenses:housing:utilities
+account expenses:housing:internet
+account expenses:transport
+account expenses:transport:gas
+account expenses:transport:parking
+account expenses:transport:public transit
+account expenses:health
+account expenses:health:insurance
+account expenses:health:medical
+account expenses:health:pharmacy
+account expenses:entertainment
+account expenses:entertainment:subscriptions
+account expenses:entertainment:movies
+account expenses:entertainment:games
+account expenses:shopping
+account expenses:shopping:clothing
+account expenses:shopping:electronics
+account expenses:shopping:household
+account expenses:personal
+account expenses:personal:haircut
+account expenses:personal:gym
+account expenses:education
+account expenses:insurance
+account expenses:taxes
+account expenses:gifts
+account expenses:charity
+account expenses:other
+
+; Equity accounts
+account equity
+account equity:opening balances

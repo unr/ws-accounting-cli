@@ -1,0 +1,46 @@
+[project]
+name = "ws-accounting-cli"
+version = "0.1.0"
+description = "TUI personal finance manager built with Textual + hledger"
+readme = "README.md"
+authors = [
+    { name = "Paul Morrison", email = "paul.unr@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "textual>=8.0.0",
+    "textual-plotext>=1.0.1",
+    "anthropic>=0.83.0",
+    "pydantic>=2.12.0",
+    "platformdirs>=4.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-asyncio>=0.25",
+    "textual-dev>=1.7",
+    "syrupy>=4.8",
+    "ruff>=0.15.0",
+]
+
+[project.scripts]
+ws-accounting = "ws_accounting.__main__:main"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "hledger: tests that require hledger binary",
+]
+
+[tool.uv.build-backend]
+module-name = "ws_accounting"
+
+[build-system]
+requires = ["uv_build>=0.9.7,<0.10.0"]
+build-backend = "uv_build"

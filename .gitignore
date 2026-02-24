@@ -27,5 +27,6 @@ venv/
 # OS
 .DS_Store
 
-# uv
-uv.lock
+# Test / cache
+.pytest_cache/
+.ruff_cache/

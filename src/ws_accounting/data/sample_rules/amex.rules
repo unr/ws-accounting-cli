@@ -1,0 +1,28 @@
+; American Express CSV import rules
+; Columns: Date, Description, Amount
+
+skip 1
+
+fields date, description, amount
+
+date-format %m/%d/%Y
+
+currency $
+
+; Amex reports charges as positive, payments as negative
+; Flip sign so expenses are positive
+amount -%amount
+
+account1 liabilities:credit card
+
+if WHOLEFDS\|WHOLE FOODS
+    account2 expenses:food:groceries
+
+if AMAZON
+    account2 expenses:shopping:household
+
+if TARGET
+    account2 expenses:shopping:household
+
+if NETFLIX
+    account2 expenses:entertainment:subscriptions
