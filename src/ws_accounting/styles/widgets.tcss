@@ -4,3 +4,66 @@
     text-style: bold;
     margin-bottom: 1;
 }
+
+/* ── PeriodSelector ──────────────────────────────────── */
+
+PeriodSelector {
+    height: auto;
+    width: auto;
+}
+
+PeriodSelector #period-select {
+    width: 20;
+}
+
+PeriodSelector .date-input {
+    width: 14;
+    margin-left: 1;
+}
+
+PeriodSelector .date-separator {
+    width: 4;
+    content-align: center middle;
+    padding: 0 1;
+}
+
+PeriodSelector .custom-range {
+    display: none;
+}
+
+PeriodSelector .custom-range.visible {
+    display: block;
+}
+
+/* ── CategoryPicker ──────────────────────────────────── */
+
+CategoryPicker {
+    height: auto;
+    width: 1fr;
+}
+
+CategoryPicker #category-input {
+    width: 1fr;
+}
+
+CategoryPicker #category-options {
+    max-height: 10;
+    display: none;
+    border: round $primary;
+    width: 1fr;
+}
+
+CategoryPicker #category-options.visible {
+    display: block;
+}
+
+/* ── TransactionTable ────────────────────────────────── */
+
+TransactionTable {
+    height: 1fr;
+}
+
+TransactionTable > .datatable--header {
+    text-style: bold;
+    background: $surface;
+}

@@ -1,0 +1,121 @@
+"""AI-powered financial insights and narrative analysis."""
+
+from __future__ import annotations
+
+from ws_accounting.ai.client import AIProvider
+from ws_accounting.ai.prompts import build_insights_prompt
+from ws_accounting.core.hledger import HLedgerGateway
+from ws_accounting.db.database import Database
+from ws_accounting.db.queries import (
+    cache_insights,
+    get_cached_insights,
+)
+
+
+class InsightsGenerator:
+    """Generate AI-powered financial narrative insights."""
+
+    def __init__(
+        self,
+        gateway: HLedgerGateway,
+        db: Database,
+        provider: AIProvider | None = None,
+    ) -> None:
+        self.gateway = gateway
+        self.db = db
+        self.provider = provider
+
+    async def generate(
+        self,
+        period: str,
+        force_refresh: bool = False,
+    ) -> str:
+        """Generate insights for a period.
+
+        Returns markdown string with analysis sections.
+        """
+        # Check cache first
+        if not force_refresh:
+            cached = get_cached_insights(self.db, period)
+            if cached:
+                return cached.content
+
+        if not self.provider:
+            return (
+                "AI insights require an API key. "
+                "Configure one in Settings."
+            )
+
+        # Gather financial context
+        context = await self._gather_context(period)
+
+        # Build prompt and call AI
+        prompt = build_insights_prompt(**context)
+        result = await self.provider.complete(prompt)
+
+        # Cache result
+        cache_insights(self.db, period, result, "claude")
+
+        return result
+
+    async def _gather_context(self, period: str) -> dict:
+        """Gather financial data for the insights prompt.
+
+        Each query is wrapped in a try/except so partial data
+        still produces useful insights.
+        """
+        context: dict[str, str] = {}
+
+        try:
+            context["income_statement"] = (
+                await self.gateway.income_statement(period)
+            )
+        except Exception:
+            context["income_statement"] = "Not available"
+
+        try:
+            context["prev_income_statement"] = (
+                await self.gateway.income_statement(
+                    _prev_period(period)
+                )
+            )
+        except Exception:
+            context["prev_income_statement"] = "Not available"
+
+        try:
+            context["expense_trends"] = await self.gateway.balance(
+                accounts=["expenses"],
+                period=f"monthly from 3 months ago to {period}",
+            )
+        except Exception:
+            context["expense_trends"] = "Not available"
+
+        try:
+            context["large_transactions"] = (
+                await self.gateway.register(
+                    query="amt:>200", period=period
+                )
+            )
+        except Exception:
+            context["large_transactions"] = "Not available"
+
+        try:
+            context["budget_status"] = await self.gateway.balance(
+                budget=True, period=period
+            )
+        except Exception:
+            context["budget_status"] = "Not available"
+
+        return context
+
+
+def _prev_period(period: str) -> str:
+    """Given a 'YYYY-MM' period, return the previous month."""
+    try:
+        parts = period.split("-")
+        year, month = int(parts[0]), int(parts[1])
+        if month == 1:
+            return f"{year - 1}-12"
+        return f"{year}-{month - 1:02d}"
+    except (ValueError, IndexError):
+        return period
