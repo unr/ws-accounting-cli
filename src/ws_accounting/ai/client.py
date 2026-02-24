@@ -1,40 +1,56 @@
-"""AI provider abstraction -- protocol + Claude implementation."""
+"""AI provider protocol and Claude implementation."""
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
-
-import anthropic
+import os
+from typing import AsyncIterator, Protocol, runtime_checkable
 
 
 @runtime_checkable
 class AIProvider(Protocol):
-    """Protocol for AI providers (Claude, future: OpenRouter, etc.)."""
+    """Protocol for AI providers -- allows swapping Claude for other models."""
 
-    async def complete(
-        self, prompt: str, system: str | None = None
-    ) -> str:
-        """Send a prompt and return the completion text."""
+    async def complete(self, prompt: str, system: str = "") -> str:
+        """Get a completion from the AI model."""
+        ...
+
+    async def stream(self, prompt: str, system: str = "") -> AsyncIterator[str]:
+        """Stream a completion token by token."""
         ...
 
 
 class ClaudeProvider:
-    """Claude API provider using the Anthropic SDK."""
+    """Anthropic Claude API provider with lazy client initialization."""
 
     def __init__(
         self,
-        api_key: str,
-        model: str = "claude-sonnet-4-5-20250929",
+        api_key: str | None = None,
+        model: str = "claude-sonnet-4-20250514",
         max_tokens: int = 4096,
     ) -> None:
-        self.client = anthropic.AsyncAnthropic(api_key=api_key)
+        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         self.model = model
         self.max_tokens = max_tokens
+        self._client = None
 
-    async def complete(
-        self, prompt: str, system: str | None = None
-    ) -> str:
+    @property
+    def is_configured(self) -> bool:
+        """Return True if an API key is available."""
+        return bool(self.api_key)
+
+    def _get_client(self):
+        """Lazy-init the Anthropic async client."""
+        if not self.is_configured:
+            raise RuntimeError("Anthropic API key not configured")
+        if self._client is None:
+            import anthropic
+
+            self._client = anthropic.AsyncAnthropic(api_key=self.api_key)
+        return self._client
+
+    async def complete(self, prompt: str, system: str = "") -> str:
         """Send a prompt to Claude and return the completion text."""
+        client = self._get_client()
         kwargs: dict = {
             "model": self.model,
             "max_tokens": self.max_tokens,
@@ -43,5 +59,20 @@ class ClaudeProvider:
         if system:
             kwargs["system"] = system
 
-        response = await self.client.messages.create(**kwargs)
+        response = await client.messages.create(**kwargs)
         return response.content[0].text
+
+    async def stream(self, prompt: str, system: str = "") -> AsyncIterator[str]:
+        """Stream a completion token by token."""
+        client = self._get_client()
+        kwargs: dict = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system:
+            kwargs["system"] = system
+
+        async with client.messages.stream(**kwargs) as stream:
+            async for text in stream.text_stream:
+                yield text

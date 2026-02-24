@@ -1,6 +1,17 @@
 """Tests for AI privacy sanitization."""
 
-from ws_accounting.ai.privacy import sanitize_description, sanitize_for_ai
+from ws_accounting.ai.privacy import (
+    get_preview,
+    sanitize,
+    sanitize_description,
+    sanitize_for_ai,
+    sanitize_transactions,
+)
+
+
+# ---------------------------------------------------------------------------
+# sanitize / sanitize_description tests (both names refer to the same fn)
+# ---------------------------------------------------------------------------
 
 
 class TestSanitizeDescription:
@@ -86,8 +97,33 @@ class TestSanitizeDescription:
         assert "user@" not in result
 
 
+class TestSanitize:
+    """Test the sanitize() function (same implementation as sanitize_description)."""
+
+    def test_card_number_redacted(self):
+        """Card numbers are redacted via sanitize()."""
+        assert sanitize("Pay 1234-5678-9012-3456") == "Pay [CARD]"
+
+    def test_ssn_redacted(self):
+        """SSNs are redacted via sanitize()."""
+        assert sanitize("SSN 123-45-6789") == "SSN [SSN]"
+
+    def test_email_redacted(self):
+        """Emails are redacted via sanitize()."""
+        assert sanitize("to hello@world.com") == "to [EMAIL]"
+
+    def test_account_number_redacted(self):
+        """Long digit sequences are redacted."""
+        assert sanitize("acct 123456789012") == "acct [ACCT]"
+
+    def test_clean_text_unchanged(self):
+        """Text without sensitive data passes through unchanged."""
+        text = "WHOLE FOODS MARKET #1234"
+        assert sanitize(text) == text
+
+
 class TestSanitizeForAi:
-    """Test batch sanitization."""
+    """Test batch sanitization of description strings."""
 
     def test_batch_sanitize(self):
         """sanitize_for_ai processes a list of descriptions."""
@@ -111,3 +147,59 @@ class TestSanitizeForAi:
         descriptions = ["First", "Second", "Third"]
         result = sanitize_for_ai(descriptions)
         assert result == ["First", "Second", "Third"]
+
+
+class TestSanitizeTransactions:
+    """Test sanitize_transactions which processes list of dicts."""
+
+    def test_sanitizes_string_values(self):
+        """String values in dicts are sanitized."""
+        txns = [
+            {"description": "Card 4111111111111111", "amount": "50.00"},
+            {"description": "WHOLE FOODS", "amount": "85.42"},
+        ]
+        result = sanitize_transactions(txns)
+        assert len(result) == 2
+        assert "[CARD]" in result[0]["description"]
+        assert result[0]["amount"] == "50.00"
+        assert result[1]["description"] == "WHOLE FOODS"
+
+    def test_non_string_values_preserved(self):
+        """Non-string values (numbers, None) pass through."""
+        txns = [{"description": "TEST", "amount": 50.0, "extra": None}]
+        result = sanitize_transactions(txns)
+        assert result[0]["amount"] == 50.0
+        assert result[0]["extra"] is None
+
+    def test_empty_list(self):
+        """Empty transaction list returns empty list."""
+        assert sanitize_transactions([]) == []
+
+
+class TestGetPreview:
+    """Test get_preview which generates human-readable output."""
+
+    def test_basic_preview(self):
+        """Preview shows descriptions and amounts."""
+        txns = [
+            {"description": "WHOLE FOODS", "amount": "$85.42"},
+            {"description": "STARBUCKS", "amount": "$5.50"},
+        ]
+        preview = get_preview(txns)
+        assert "Data being sent to AI:" in preview
+        assert "WHOLE FOODS: $85.42" in preview
+        assert "STARBUCKS: $5.50" in preview
+
+    def test_truncates_at_10(self):
+        """Preview shows first 10 items and a count of remaining."""
+        txns = [{"description": f"TXN {i}", "amount": f"${i}.00"} for i in range(15)]
+        preview = get_preview(txns)
+        assert "... and 5 more" in preview
+        # Should show first 10
+        assert "TXN 0" in preview
+        assert "TXN 9" in preview
+
+    def test_empty_transactions(self):
+        """Empty transaction list produces header only."""
+        preview = get_preview([])
+        assert "Data being sent to AI:" in preview
