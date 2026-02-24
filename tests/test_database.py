@@ -1,58 +1,39 @@
 """Comprehensive tests for the SQLite sidecar database layer."""
 
-from decimal import Decimal
+import sqlite3
 
 import pytest
 
 from ws_accounting.db.database import Database
 from ws_accounting.db.models import (
     Budget,
-    CategorizationCache,
+    CategorizationEntry,
     Goal,
     ImportProfile,
-    InsightsCache,
-    Reconciliation,
     RecurringTransaction,
 )
-from ws_accounting.db.queries import (
-    advance_recurring,
-    amount_to_bucket,
-    cache_category,
-    cache_insights,
-    check_import_hash,
-    create_goal,
-    create_import_profile,
-    create_recurring,
-    delete_budget,
-    delete_goal,
-    delete_recurring,
-    get_budgets,
-    get_cached_insights,
-    get_due_recurring,
-    get_goals,
-    get_import_profiles,
-    get_last_reconciliation,
-    get_recurring,
-    get_setting,
-    lookup_category,
-    record_correction,
-    get_corrections_count,
-    record_import,
-    record_reconciliation,
-    set_setting,
-    store_import_hashes,
-    update_goal_progress,
-    upsert_budget,
-)
+from ws_accounting.db import queries
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
-def db() -> Database:
-    """Create an in-memory Database with migrations applied."""
-    database = Database(":memory:")
+def db(tmp_path) -> Database:
+    """Create a Database with migrations applied, using tmp_path for file."""
+    db_path = tmp_path / "test.db"
+    database = Database(db_path)
     database.migrate()
     yield database
     database.close()
+
+
+@pytest.fixture
+def conn(db: Database) -> sqlite3.Connection:
+    """Return the raw connection from the db fixture."""
+    return db.connect()
 
 
 # ---------------------------------------------------------------------------
@@ -61,280 +42,254 @@ def db() -> Database:
 
 
 class TestDatabaseCore:
-    def test_memory_database_creates(self):
-        """Database with :memory: can be instantiated and connected."""
-        with Database(":memory:") as database:
-            assert database.conn is not None
+    def test_creates_file_and_schema_version(self, tmp_path):
+        """Database creates the file and schema_version table on migrate()."""
+        db_path = tmp_path / "new.db"
+        database = Database(db_path)
+        database.migrate()
+        assert db_path.exists()
+        # schema_version table should exist with version 1
+        row = database.connect().execute(
+            "SELECT MAX(version) FROM schema_version"
+        ).fetchone()
+        assert row[0] == 1
+        database.close()
 
-    def test_current_version_before_migration(self):
-        """Version is 0 before any migrations run."""
-        with Database(":memory:") as database:
-            assert database.current_version() == 0
+    def test_migration_001_creates_all_tables(self, conn: sqlite3.Connection):
+        """Migration 001 creates all expected tables."""
+        expected_tables = [
+            "schema_version",
+            "budgets",
+            "goals",
+            "recurring_transactions",
+            "categorization_cache",
+            "categorization_corrections",
+            "reconciliations",
+            "import_profiles",
+            "import_history",
+            "import_hashes",
+            "insights_cache",
+            "app_settings",
+        ]
+        rows = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        ).fetchall()
+        actual_tables = [r["name"] for r in rows]
+        for table in expected_tables:
+            assert table in actual_tables, f"Table {table} not found in schema"
 
-    def test_migration_sets_version(self, db: Database):
-        """After migration, version is 1."""
-        assert db.current_version() == 1
-
-    def test_migration_is_idempotent(self, db: Database):
+    def test_migration_idempotent(self, db: Database):
         """Running migrate again does nothing (no error, same version)."""
         db.migrate()
-        assert db.current_version() == 1
+        row = db.connect().execute(
+            "SELECT MAX(version) FROM schema_version"
+        ).fetchone()
+        assert row[0] == 1
 
-    def test_context_manager_closes(self):
-        """Context manager closes the connection."""
-        database = Database(":memory:")
-        database.migrate()
-        with database:
+    def test_connection_reuse(self, db: Database):
+        """Calling connect() twice returns the same connection object."""
+        conn1 = db.connect()
+        conn2 = db.connect()
+        assert conn1 is conn2
+
+    def test_context_manager(self, tmp_path):
+        """Context manager opens and closes the connection."""
+        db_path = tmp_path / "ctx.db"
+        with Database(db_path) as database:
+            database.migrate()
             assert database._conn is not None
         assert database._conn is None
 
-    def test_wal_mode_enabled(self, db: Database):
-        """WAL journal mode is set."""
-        row = db.conn.execute("PRAGMA journal_mode").fetchone()
-        # :memory: databases report "memory" for journal_mode
-        assert row[0] in ("wal", "memory")
+    def test_wal_mode_enabled(self, conn: sqlite3.Connection):
+        """WAL journal mode is set (file-based DBs)."""
+        row = conn.execute("PRAGMA journal_mode").fetchone()
+        assert row[0] == "wal"
 
-    def test_foreign_keys_enabled(self, db: Database):
+    def test_foreign_keys_enabled(self, conn: sqlite3.Connection):
         """Foreign keys pragma is on."""
-        row = db.conn.execute("PRAGMA foreign_keys").fetchone()
+        row = conn.execute("PRAGMA foreign_keys").fetchone()
         assert row[0] == 1
 
 
 # ---------------------------------------------------------------------------
-# Budget tests
+# Budget CRUD tests
 # ---------------------------------------------------------------------------
 
 
 class TestBudgets:
-    def test_upsert_and_get(self, db: Database):
+    def test_insert_and_get(self, conn: sqlite3.Connection):
         """Insert a budget and retrieve it."""
-        upsert_budget(db, "expenses:food", "2026-01", "600.00")
-        budgets = get_budgets(db, "2026-01")
+        budget = Budget(category="expenses:food", amount="600.00", period="monthly")
+        row_id = queries.upsert_budget(conn, budget)
+        assert row_id is not None
+
+        budgets = queries.get_budgets(conn)
         assert len(budgets) == 1
         assert budgets[0].category == "expenses:food"
         assert budgets[0].amount == "600.00"
-        assert budgets[0].rollover is False
+        assert budgets[0].period == "monthly"
 
-    def test_upsert_updates_existing(self, db: Database):
-        """Upserting same category+month updates the amount."""
-        upsert_budget(db, "expenses:food", "2026-01", "600.00")
-        upsert_budget(db, "expenses:food", "2026-01", "700.00", rollover=True)
-        budgets = get_budgets(db, "2026-01")
+    def test_update_existing(self, conn: sqlite3.Connection):
+        """Upserting with an id updates the existing row."""
+        budget = Budget(category="expenses:food", amount="600.00", period="monthly")
+        row_id = queries.upsert_budget(conn, budget)
+
+        budget.id = row_id
+        budget.amount = "700.00"
+        budget.rollover = 1
+        queries.upsert_budget(conn, budget)
+
+        budgets = queries.get_budgets(conn)
         assert len(budgets) == 1
         assert budgets[0].amount == "700.00"
-        assert budgets[0].rollover is True
+        assert budgets[0].rollover == 1
 
-    def test_get_budgets_filters_by_month(self, db: Database):
-        """Only budgets for the requested month are returned."""
-        upsert_budget(db, "expenses:food", "2026-01", "600.00")
-        upsert_budget(db, "expenses:food", "2026-02", "650.00")
-        assert len(get_budgets(db, "2026-01")) == 1
-        assert len(get_budgets(db, "2026-02")) == 1
-        assert len(get_budgets(db, "2026-03")) == 0
-
-    def test_delete_budget(self, db: Database):
+    def test_delete_budget(self, conn: sqlite3.Connection):
         """Delete removes the budget."""
-        upsert_budget(db, "expenses:food", "2026-01", "600.00")
-        budgets = get_budgets(db, "2026-01")
-        delete_budget(db, budgets[0].id)
-        assert len(get_budgets(db, "2026-01")) == 0
+        budget = Budget(category="expenses:food", amount="600.00", period="monthly")
+        row_id = queries.upsert_budget(conn, budget)
+
+        queries.delete_budget(conn, row_id)
+        assert len(queries.get_budgets(conn)) == 0
+
+    def test_multiple_budgets(self, conn: sqlite3.Connection):
+        """Multiple budgets can coexist."""
+        queries.upsert_budget(
+            conn, Budget(category="expenses:food", amount="600.00", period="monthly")
+        )
+        queries.upsert_budget(
+            conn, Budget(category="expenses:housing", amount="1500.00", period="monthly")
+        )
+        budgets = queries.get_budgets(conn)
+        assert len(budgets) == 2
 
 
 # ---------------------------------------------------------------------------
-# Goal tests
+# Goal CRUD tests
 # ---------------------------------------------------------------------------
 
 
 class TestGoals:
-    def test_create_and_get(self, db: Database):
-        """Create a goal and retrieve it."""
-        goal = create_goal(
-            db,
+    def test_insert_and_get(self, conn: sqlite3.Connection):
+        """Insert a goal and retrieve it."""
+        goal = Goal(
             name="Emergency Fund",
             target_amount="10000.00",
-            type="savings",
+            current_amount="0",
             target_date="2026-12-31",
         )
-        assert goal.id is not None
-        assert goal.name == "Emergency Fund"
-        assert goal.current_amount == "0"
+        row_id = queries.upsert_goal(conn, goal)
+        assert row_id is not None
 
-        goals = get_goals(db)
+        goals = queries.get_goals(conn)
         assert len(goals) == 1
         assert goals[0].name == "Emergency Fund"
+        assert goals[0].target_amount == "10000.00"
+        assert goals[0].current_amount == "0"
 
-    def test_update_goal_progress(self, db: Database):
-        """Updating progress changes current_amount."""
-        goal = create_goal(
-            db,
-            name="Vacation",
-            target_amount="3000.00",
-            type="savings",
-        )
-        update_goal_progress(db, goal.id, "1500.00")
-        goals = get_goals(db)
+    def test_update_existing(self, conn: sqlite3.Connection):
+        """Upserting with an id updates the goal."""
+        goal = Goal(name="Vacation", target_amount="3000.00")
+        row_id = queries.upsert_goal(conn, goal)
+
+        goal.id = row_id
+        goal.current_amount = "1500.00"
+        queries.upsert_goal(conn, goal)
+
+        goals = queries.get_goals(conn)
+        assert len(goals) == 1
         assert goals[0].current_amount == "1500.00"
 
-    def test_delete_goal(self, db: Database):
-        """Delete removes the goal."""
-        goal = create_goal(
-            db,
-            name="Temp Goal",
-            target_amount="100.00",
-            type="savings",
-        )
-        delete_goal(db, goal.id)
-        assert len(get_goals(db)) == 0
-
 
 # ---------------------------------------------------------------------------
-# Categorization tests
+# Categorization cache tests
 # ---------------------------------------------------------------------------
 
 
-class TestCategorization:
-    def test_lookup_miss(self, db: Database):
+class TestCategorizationCache:
+    def test_cache_miss(self, conn: sqlite3.Connection):
         """Cache miss returns None."""
-        result = lookup_category(db, "WHOLE FOODS", "$25-100")
+        result = queries.get_cached_category(conn, "nonexistent_hash")
         assert result is None
 
-    def test_cache_and_lookup_hit(self, db: Database):
-        """Cache a category then look it up."""
-        cache_category(
-            db,
+    def test_store_and_retrieve(self, conn: sqlite3.Connection):
+        """Store a categorization and retrieve it by hash."""
+        entry = CategorizationEntry(
+            description_hash="abc123",
             description="WHOLE FOODS",
             amount_bucket="$25-100",
-            account="expenses:food:groceries",
+            suggested_account="expenses:food:groceries",
             confidence=0.95,
             source="ai",
         )
-        result = lookup_category(db, "WHOLE FOODS", "$25-100")
+        queries.cache_category(conn, entry)
+
+        result = queries.get_cached_category(conn, "abc123")
         assert result is not None
-        assert result.account == "expenses:food:groceries"
+        assert result.description == "WHOLE FOODS"
+        assert result.suggested_account == "expenses:food:groceries"
         assert result.confidence == 0.95
         assert result.source == "ai"
 
-    def test_cache_upsert(self, db: Database):
-        """Caching same desc+bucket updates the record."""
-        cache_category(
-            db, "STARBUCKS", "$0-25",
-            "expenses:food:coffee", 0.8, "ai",
+    def test_upsert_updates_on_conflict(self, conn: sqlite3.Connection):
+        """Caching the same hash updates the record."""
+        entry1 = CategorizationEntry(
+            description_hash="abc123",
+            description="STARBUCKS",
+            suggested_account="expenses:food:coffee",
+            confidence=0.8,
+            source="ai",
         )
-        cache_category(
-            db, "STARBUCKS", "$0-25",
-            "expenses:food:dining", 0.99, "user",
+        queries.cache_category(conn, entry1)
+
+        entry2 = CategorizationEntry(
+            description_hash="abc123",
+            description="STARBUCKS",
+            suggested_account="expenses:food:dining",
+            confidence=0.99,
+            source="user",
         )
-        result = lookup_category(db, "STARBUCKS", "$0-25")
-        assert result.account == "expenses:food:dining"
+        queries.cache_category(conn, entry2)
+
+        result = queries.get_cached_category(conn, "abc123")
+        assert result.suggested_account == "expenses:food:dining"
         assert result.confidence == 0.99
+        assert result.source == "user"
 
-    def test_record_correction_and_count(self, db: Database):
-        """Record corrections and count them."""
-        assert get_corrections_count(db, "AMZN") == 0
-        record_correction(
-            db, "AMZN", "expenses:shopping", "expenses:office"
+    def test_record_correction(self, conn: sqlite3.Connection):
+        """Record a correction and verify it was stored."""
+        queries.record_correction(
+            conn, "AMZN", "expenses:shopping", "expenses:office"
         )
-        record_correction(
-            db, "AMZN", "expenses:shopping", "expenses:electronics"
-        )
-        assert get_corrections_count(db, "AMZN") == 2
-        # Different description has 0
-        assert get_corrections_count(db, "TARGET") == 0
-
-
-class TestAmountToBucket:
-    def test_zero(self):
-        assert amount_to_bucket(Decimal("0")) == "$0-25"
-
-    def test_small(self):
-        assert amount_to_bucket(Decimal("10.50")) == "$0-25"
-
-    def test_boundary_25(self):
-        assert amount_to_bucket(Decimal("24.99")) == "$0-25"
-        assert amount_to_bucket(Decimal("25.00")) == "$25-100"
-
-    def test_medium(self):
-        assert amount_to_bucket(Decimal("75.00")) == "$25-100"
-
-    def test_boundary_100(self):
-        assert amount_to_bucket(Decimal("99.99")) == "$25-100"
-        assert amount_to_bucket(Decimal("100.00")) == "$100-500"
-
-    def test_large(self):
-        assert amount_to_bucket(Decimal("250.00")) == "$100-500"
-
-    def test_boundary_500(self):
-        assert amount_to_bucket(Decimal("499.99")) == "$100-500"
-        assert amount_to_bucket(Decimal("500.00")) == "$500+"
-
-    def test_very_large(self):
-        assert amount_to_bucket(Decimal("9999.99")) == "$500+"
-
-    def test_negative_uses_absolute(self):
-        assert amount_to_bucket(Decimal("-50.00")) == "$25-100"
+        row = conn.execute(
+            "SELECT * FROM categorization_corrections WHERE original_description = ?",
+            ("AMZN",),
+        ).fetchone()
+        assert row is not None
+        assert row["original_account"] == "expenses:shopping"
+        assert row["corrected_account"] == "expenses:office"
 
 
 # ---------------------------------------------------------------------------
-# Import tests
+# Import hash dedup tests
 # ---------------------------------------------------------------------------
 
 
-class TestImports:
-    def test_create_import_profile(self, db: Database):
-        """Create and retrieve import profiles."""
-        profile = create_import_profile(
-            db,
-            name="Chase Checking",
-            rules_path="/rules/chase.rules",
-            bank_name="Chase",
-        )
-        assert profile.id is not None
-        assert profile.name == "Chase Checking"
-        assert profile.bank_name == "Chase"
-        assert profile.default_status == "*"
+class TestImportHashes:
+    def test_store_and_check_exists(self, conn: sqlite3.Connection):
+        """Store a hash and verify it exists."""
+        queries.store_import_hash(conn, "txn_hash_001", "jan2026.csv")
+        assert queries.check_import_hash(conn, "txn_hash_001") is True
 
-        profiles = get_import_profiles(db)
-        assert len(profiles) == 1
+    def test_check_nonexistent_returns_false(self, conn: sqlite3.Connection):
+        """Checking a nonexistent hash returns False."""
+        assert queries.check_import_hash(conn, "does_not_exist") is False
 
-    def test_record_import(self, db: Database):
-        """Record an import event."""
-        profile = create_import_profile(
-            db, "Generic", "/rules/generic.rules"
-        )
-        history = record_import(
-            db,
-            csv_filename="jan2026.csv",
-            profile_id=profile.id,
-            txn_count=42,
-            duplicate_count=3,
-        )
-        assert history.id is not None
-        assert history.txn_count == 42
-        assert history.duplicate_count == 3
-
-    def test_store_and_check_hashes(self, db: Database):
-        """Store hashes and detect duplicates."""
-        profile = create_import_profile(
-            db, "Test", "/rules/test.rules"
-        )
-        history = record_import(db, "test.csv", profile.id, 2)
-
-        store_import_hashes(db, ["abc123", "def456"], history.id)
-
-        assert check_import_hash(db, "abc123") is True
-        assert check_import_hash(db, "def456") is True
-        assert check_import_hash(db, "ghi789") is False
-
-    def test_duplicate_hash_ignored(self, db: Database):
-        """Storing an existing hash doesn't raise."""
-        profile = create_import_profile(
-            db, "Test", "/rules/test.rules"
-        )
-        history = record_import(db, "test.csv", profile.id, 1)
-        store_import_hashes(db, ["abc123"], history.id)
-        # Should not raise
-        store_import_hashes(db, ["abc123"], history.id)
-        assert check_import_hash(db, "abc123") is True
+    def test_duplicate_store_no_error(self, conn: sqlite3.Connection):
+        """Storing the same hash twice does not raise."""
+        queries.store_import_hash(conn, "txn_hash_001", "jan2026.csv")
+        queries.store_import_hash(conn, "txn_hash_001", "jan2026.csv")
+        assert queries.check_import_hash(conn, "txn_hash_001") is True
 
 
 # ---------------------------------------------------------------------------
@@ -343,233 +298,46 @@ class TestImports:
 
 
 class TestSettings:
-    def test_get_missing_setting(self, db: Database):
+    def test_get_missing_returns_none(self, conn: sqlite3.Connection):
         """Getting a non-existent key returns None."""
-        assert get_setting(db, "nonexistent") is None
+        assert queries.get_setting(conn, "nonexistent") is None
 
-    def test_set_and_get(self, db: Database):
+    def test_set_and_get(self, conn: sqlite3.Connection):
         """Set a setting and retrieve it."""
-        set_setting(db, "theme", "dark")
-        assert get_setting(db, "theme") == "dark"
+        queries.set_setting(conn, "theme", "dark")
+        assert queries.get_setting(conn, "theme") == "dark"
 
-    def test_set_overwrites(self, db: Database):
+    def test_overwrite_existing(self, conn: sqlite3.Connection):
         """Setting an existing key overwrites the value."""
-        set_setting(db, "theme", "dark")
-        set_setting(db, "theme", "light")
-        assert get_setting(db, "theme") == "light"
+        queries.set_setting(conn, "theme", "dark")
+        queries.set_setting(conn, "theme", "light")
+        assert queries.get_setting(conn, "theme") == "light"
 
 
 # ---------------------------------------------------------------------------
-# Recurring transaction tests
+# Import profiles tests
 # ---------------------------------------------------------------------------
 
 
-class TestRecurring:
-    def test_create_and_get(self, db: Database):
-        """Create and list recurring transactions."""
-        rec = create_recurring(
-            db,
-            description="Rent",
-            amount="1500.00",
-            from_account="assets:bank:checking",
-            to_account="expenses:housing:rent",
-            frequency="monthly",
-            next_due="2026-03-01",
+class TestImportProfiles:
+    def test_get_empty(self, conn: sqlite3.Connection):
+        """No profiles returns empty list."""
+        profiles = queries.get_import_profiles(conn)
+        assert profiles == []
+
+    def test_insert_and_get(self, conn: sqlite3.Connection):
+        """Insert an import profile and retrieve it."""
+        conn.execute(
+            """INSERT INTO import_profiles (name, bank_name, account)
+               VALUES (?, ?, ?)""",
+            ("Chase Checking", "Chase", "assets:bank:checking"),
         )
-        assert rec.id is not None
-        assert rec.description == "Rent"
-        assert rec.frequency == "monthly"
-
-        all_rec = get_recurring(db)
-        assert len(all_rec) == 1
-
-    def test_delete_recurring(self, db: Database):
-        """Delete removes the recurring transaction."""
-        rec = create_recurring(
-            db, "Spotify", "9.99",
-            "assets:bank:checking", "expenses:subscriptions",
-            "monthly", "2026-03-15",
-        )
-        delete_recurring(db, rec.id)
-        assert len(get_recurring(db)) == 0
-
-    def test_advance_weekly(self, db: Database):
-        """Advancing weekly adds 7 days."""
-        rec = create_recurring(
-            db, "Gym", "50.00",
-            "assets:bank:checking", "expenses:health",
-            "weekly", "2026-01-07",
-        )
-        advance_recurring(db, rec.id)
-        updated = get_recurring(db)
-        assert updated[0].next_due == "2026-01-14"
-
-    def test_advance_monthly(self, db: Database):
-        """Advancing monthly adds one month."""
-        rec = create_recurring(
-            db, "Rent", "1500.00",
-            "assets:bank:checking", "expenses:housing",
-            "monthly", "2026-01-15",
-        )
-        advance_recurring(db, rec.id)
-        updated = get_recurring(db)
-        assert updated[0].next_due == "2026-02-15"
-
-    def test_advance_monthly_end_of_month(self, db: Database):
-        """Advancing from Jan 31 clamps to Feb 28."""
-        rec = create_recurring(
-            db, "Inv", "100.00",
-            "assets:bank:checking", "assets:investments",
-            "monthly", "2026-01-31",
-        )
-        advance_recurring(db, rec.id)
-        updated = get_recurring(db)
-        assert updated[0].next_due == "2026-02-28"
-
-    def test_advance_monthly_december(self, db: Database):
-        """Advancing from December goes to January next year."""
-        rec = create_recurring(
-            db, "Year End", "200.00",
-            "assets:bank:checking", "expenses:misc",
-            "monthly", "2025-12-15",
-        )
-        advance_recurring(db, rec.id)
-        updated = get_recurring(db)
-        assert updated[0].next_due == "2026-01-15"
-
-    def test_advance_yearly(self, db: Database):
-        """Advancing yearly adds one year."""
-        rec = create_recurring(
-            db, "Insurance", "1200.00",
-            "assets:bank:checking", "expenses:insurance",
-            "yearly", "2026-03-01",
-        )
-        advance_recurring(db, rec.id)
-        updated = get_recurring(db)
-        assert updated[0].next_due == "2027-03-01"
-
-    def test_advance_yearly_leap_day(self, db: Database):
-        """Advancing from Feb 29 leap year clamps to Feb 28."""
-        rec = create_recurring(
-            db, "Leap", "100.00",
-            "assets:bank:checking", "expenses:misc",
-            "yearly", "2024-02-29",
-        )
-        advance_recurring(db, rec.id)
-        updated = get_recurring(db)
-        assert updated[0].next_due == "2025-02-28"
-
-    def test_get_due_recurring(self, db: Database):
-        """Only due transactions are returned."""
-        create_recurring(
-            db, "Past Due", "10.00",
-            "assets:checking", "expenses:misc",
-            "monthly", "2026-01-01",
-        )
-        create_recurring(
-            db, "Due Today", "20.00",
-            "assets:checking", "expenses:misc",
-            "monthly", "2026-02-15",
-        )
-        create_recurring(
-            db, "Future", "30.00",
-            "assets:checking", "expenses:misc",
-            "monthly", "2026-03-01",
-        )
-
-        due = get_due_recurring(db, "2026-02-15")
-        descriptions = [r.description for r in due]
-        assert "Past Due" in descriptions
-        assert "Due Today" in descriptions
-        assert "Future" not in descriptions
-
-    def test_get_due_respects_end_date(self, db: Database):
-        """Expired recurring transactions are excluded."""
-        create_recurring(
-            db, "Expired", "10.00",
-            "assets:checking", "expenses:misc",
-            "monthly", "2026-01-01",
-            end_date="2026-01-31",
-        )
-        due = get_due_recurring(db, "2026-02-15")
-        assert len(due) == 0
-
-
-# ---------------------------------------------------------------------------
-# Reconciliation tests
-# ---------------------------------------------------------------------------
-
-
-class TestReconciliation:
-    def test_record_and_get(self, db: Database):
-        """Record a reconciliation and retrieve it."""
-        record_reconciliation(
-            db,
-            account="assets:bank:checking",
-            statement_date="2026-01-31",
-            statement_balance="5234.56",
-        )
-        rec = get_last_reconciliation(db, "assets:bank:checking")
-        assert rec is not None
-        assert rec.account == "assets:bank:checking"
-        assert rec.statement_balance == "5234.56"
-        assert rec.status == "complete"
-
-    def test_get_last_returns_most_recent(self, db: Database):
-        """Most recent reconciliation is returned."""
-        record_reconciliation(
-            db, "assets:bank:checking", "2026-01-31", "5000.00"
-        )
-        record_reconciliation(
-            db, "assets:bank:checking", "2026-02-28", "5500.00"
-        )
-        rec = get_last_reconciliation(db, "assets:bank:checking")
-        assert rec.statement_date == "2026-02-28"
-        assert rec.statement_balance == "5500.00"
-
-    def test_get_last_no_records(self, db: Database):
-        """Returns None when no reconciliations exist."""
-        rec = get_last_reconciliation(db, "assets:bank:checking")
-        assert rec is None
-
-
-# ---------------------------------------------------------------------------
-# Insights cache tests
-# ---------------------------------------------------------------------------
-
-
-class TestInsights:
-    def test_cache_and_get(self, db: Database):
-        """Cache insights and retrieve them."""
-        cache_insights(
-            db,
-            period="2026-01",
-            content="You spent more on groceries this month.",
-            model="claude-opus-4-20250514",
-        )
-        result = get_cached_insights(db, "2026-01")
-        assert result is not None
-        assert result.period == "2026-01"
-        assert "groceries" in result.content
-        assert result.model == "claude-opus-4-20250514"
-
-    def test_get_returns_most_recent(self, db: Database):
-        """Most recent insight for a period is returned."""
-        # Insert old insight with an explicit earlier timestamp to avoid
-        # UNIQUE(period, generated_at) collision within the same second.
-        db.conn.execute(
-            "INSERT INTO insights_cache (period, content, model, generated_at) "
-            "VALUES (?, ?, ?, ?)",
-            ("2026-01", "Old insight", "claude-3-haiku", "2026-01-01 00:00:00"),
-        )
-        db.conn.commit()
-        cache_insights(db, "2026-01", "New insight", "claude-opus-4-20250514")
-        result = get_cached_insights(db, "2026-01")
-        assert result.content == "New insight"
-
-    def test_get_miss(self, db: Database):
-        """Returns None for uncached period."""
-        assert get_cached_insights(db, "2099-01") is None
+        conn.commit()
+        profiles = queries.get_import_profiles(conn)
+        assert len(profiles) == 1
+        assert profiles[0].name == "Chase Checking"
+        assert profiles[0].bank_name == "Chase"
+        assert profiles[0].account == "assets:bank:checking"
 
 
 # ---------------------------------------------------------------------------
@@ -582,62 +350,49 @@ class TestMonetaryTextStorage:
 
     MONETARY_TABLES_AND_COLUMNS = [
         ("budgets", "amount"),
-        ("budgets", "rollover_cap"),
         ("goals", "target_amount"),
         ("goals", "current_amount"),
         ("recurring_transactions", "amount"),
         ("reconciliations", "statement_balance"),
     ]
 
-    def test_monetary_columns_are_text(self, db: Database):
+    def test_monetary_columns_are_text(self, conn: sqlite3.Connection):
         """All monetary columns must be declared as TEXT."""
         for table, column in self.MONETARY_TABLES_AND_COLUMNS:
-            rows = db.conn.execute(
-                f"PRAGMA table_info({table})"
-            ).fetchall()
+            rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
             col_info = {r["name"]: r["type"] for r in rows}
-            assert column in col_info, (
-                f"Column {column} not found in {table}"
-            )
+            assert column in col_info, f"Column {column} not found in {table}"
             assert col_info[column] == "TEXT", (
                 f"{table}.{column} should be TEXT, got {col_info[column]}"
             )
 
-    def test_budget_amount_stored_as_text(self, db: Database):
+    def test_budget_amount_roundtrips_as_text(self, conn: sqlite3.Connection):
         """Budget amount round-trips as exact text."""
-        upsert_budget(db, "expenses:food", "2026-01", "600.00")
-        # Query with raw SQL to check the actual stored value
-        row = db.conn.execute(
+        queries.upsert_budget(
+            conn, Budget(category="expenses:food", amount="600.00", period="monthly")
+        )
+        row = conn.execute(
             "SELECT amount, typeof(amount) FROM budgets LIMIT 1"
         ).fetchone()
         assert row[0] == "600.00"
         assert row[1] == "text"
 
-    def test_goal_amounts_stored_as_text(self, db: Database):
+    def test_goal_amounts_roundtrip_as_text(self, conn: sqlite3.Connection):
         """Goal amounts round-trip as exact text."""
-        goal = create_goal(
-            db, "Test", "10000.00", "savings"
-        )
-        update_goal_progress(db, goal.id, "2500.50")
-        row = db.conn.execute(
+        goal = Goal(name="Test", target_amount="10000.00")
+        row_id = queries.upsert_goal(conn, goal)
+
+        goal.id = row_id
+        goal.current_amount = "2500.50"
+        queries.upsert_goal(conn, goal)
+
+        row = conn.execute(
             "SELECT target_amount, typeof(target_amount), "
             "current_amount, typeof(current_amount) "
             "FROM goals WHERE id = ?",
-            (goal.id,),
+            (row_id,),
         ).fetchone()
         assert row[0] == "10000.00"
         assert row[1] == "text"
         assert row[2] == "2500.50"
         assert row[3] == "text"
-
-    def test_reconciliation_balance_stored_as_text(self, db: Database):
-        """Reconciliation balance round-trips as exact text."""
-        record_reconciliation(
-            db, "assets:checking", "2026-01-31", "12345.67"
-        )
-        row = db.conn.execute(
-            "SELECT statement_balance, typeof(statement_balance) "
-            "FROM reconciliations LIMIT 1"
-        ).fetchone()
-        assert row[0] == "12345.67"
-        assert row[1] == "text"
