@@ -1,1 +1,24 @@
-/* reports screen styles */
+#reports-container {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#reports-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#reports-tabs {
+    height: 1fr;
+}
+
+.empty-state {
+    text-align: center;
+    color: $text-muted;
+    padding: 4 0;
+}
+
+PlotextPlot {
+    height: 1fr;
+    min-height: 10;
+}

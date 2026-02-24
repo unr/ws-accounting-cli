@@ -214,3 +214,12 @@ class AppSetting:
             value=row["value"],
             updated_at=row["updated_at"],
         )
+
+
+@dataclass
+class InsightsCacheEntry:
+    """A cached AI insights result."""
+
+    content: str = ""
+    generated_at: str | None = None
+    period: str | None = None

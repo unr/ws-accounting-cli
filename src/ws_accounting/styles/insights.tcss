@@ -1,1 +1,52 @@
-/* insights screen styles */
+#insights-container {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#insights-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#insights-controls {
+    height: 3;
+    margin-bottom: 1;
+}
+
+.control-label {
+    padding-top: 1;
+    width: auto;
+}
+
+.warning-box {
+    background: $warning 20%;
+    border: round $warning;
+    padding: 1 2;
+    margin: 1 0;
+}
+
+#insights-loading {
+    align: center middle;
+    height: auto;
+}
+
+#insights-content {
+    height: 1fr;
+}
+
+#insights-markdown {
+    height: 1fr;
+    padding: 0 1;
+}
+
+.timestamp {
+    color: $text-muted;
+    text-style: italic;
+    padding: 0 1;
+}
+
+.empty-state {
+    text-align: center;
+    color: $text-muted;
+    padding: 4 0;
+}

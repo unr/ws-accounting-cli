@@ -1,6 +1,6 @@
 """Named query functions for the sidecar database.
 
-All functions take a sqlite3.Connection as the first argument
+All functions take a sqlite3.Connection or Database object as the first argument
 and perform CRUD operations using the dataclass models.
 """
 
@@ -12,7 +12,9 @@ from ws_accounting.db.models import (
     Budget,
     CategorizationEntry,
     Goal,
+    ImportHistory,
     ImportProfile,
+    InsightsCacheEntry,
     RecurringTransaction,
 )
 
@@ -22,16 +24,23 @@ from ws_accounting.db.models import (
 # ---------------------------------------------------------------------------
 
 
-def get_budgets(conn: sqlite3.Connection) -> list[Budget]:
-    """Return all budgets ordered by category."""
+def get_budgets(db_or_conn, month: str | None = None) -> list[Budget]:
+    """Return all budgets ordered by category.
+
+    Args:
+        db_or_conn: A Database object or sqlite3.Connection.
+        month: Optional YYYY-MM filter (currently returns all budgets).
+    """
+    conn = _resolve_conn(db_or_conn)
     rows = conn.execute(
         "SELECT * FROM budgets ORDER BY category"
     ).fetchall()
     return [Budget.from_row(r) for r in rows]
 
 
-def upsert_budget(conn: sqlite3.Connection, budget: Budget) -> int:
+def upsert_budget(db_or_conn, budget: Budget) -> int:
     """Insert or update a budget. Returns the row id."""
+    conn = _resolve_conn(db_or_conn)
     if budget.id is not None:
         conn.execute(
             """UPDATE budgets
@@ -68,8 +77,9 @@ def upsert_budget(conn: sqlite3.Connection, budget: Budget) -> int:
         return cursor.lastrowid
 
 
-def delete_budget(conn: sqlite3.Connection, budget_id: int) -> None:
+def delete_budget(db_or_conn, budget_id: int) -> None:
     """Delete a budget by id."""
+    conn = _resolve_conn(db_or_conn)
     conn.execute("DELETE FROM budgets WHERE id = ?", (budget_id,))
     conn.commit()
 
@@ -79,16 +89,18 @@ def delete_budget(conn: sqlite3.Connection, budget_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-def get_goals(conn: sqlite3.Connection) -> list[Goal]:
+def get_goals(db_or_conn) -> list[Goal]:
     """Return all goals ordered by creation time."""
+    conn = _resolve_conn(db_or_conn)
     rows = conn.execute(
         "SELECT * FROM goals ORDER BY created_at"
     ).fetchall()
     return [Goal.from_row(r) for r in rows]
 
 
-def upsert_goal(conn: sqlite3.Connection, goal: Goal) -> int:
+def upsert_goal(db_or_conn, goal: Goal) -> int:
     """Insert or update a goal. Returns the row id."""
+    conn = _resolve_conn(db_or_conn)
     if goal.id is not None:
         conn.execute(
             """UPDATE goals
@@ -128,16 +140,18 @@ def upsert_goal(conn: sqlite3.Connection, goal: Goal) -> int:
 # ---------------------------------------------------------------------------
 
 
-def get_recurring(conn: sqlite3.Connection) -> list[RecurringTransaction]:
+def get_recurring(db_or_conn) -> list[RecurringTransaction]:
     """Return all recurring transactions ordered by next_due."""
+    conn = _resolve_conn(db_or_conn)
     rows = conn.execute(
         "SELECT * FROM recurring_transactions ORDER BY next_due"
     ).fetchall()
     return [RecurringTransaction.from_row(r) for r in rows]
 
 
-def upsert_recurring(conn: sqlite3.Connection, rec: RecurringTransaction) -> int:
+def upsert_recurring(db_or_conn, rec: RecurringTransaction) -> int:
     """Insert or update a recurring transaction. Returns the row id."""
+    conn = _resolve_conn(db_or_conn)
     if rec.id is not None:
         conn.execute(
             """UPDATE recurring_transactions
@@ -291,16 +305,18 @@ def record_correction(
 # ---------------------------------------------------------------------------
 
 
-def get_setting(conn: sqlite3.Connection, key: str) -> str | None:
+def get_setting(db_or_conn, key: str) -> str | None:
     """Get an app setting value. Returns None if not set."""
+    conn = _resolve_conn(db_or_conn)
     row = conn.execute(
         "SELECT value FROM app_settings WHERE key = ?", (key,)
     ).fetchone()
     return row["value"] if row else None
 
 
-def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
+def set_setting(db_or_conn, key: str, value: str) -> None:
     """Set an app setting (upsert)."""
+    conn = _resolve_conn(db_or_conn)
     conn.execute(
         """INSERT INTO app_settings (key, value, updated_at)
            VALUES (?, ?, datetime('now'))
@@ -317,16 +333,18 @@ def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def check_import_hash(conn: sqlite3.Connection, hash: str) -> bool:
+def check_import_hash(db_or_conn, hash: str) -> bool:
     """Return True if the hash already exists (duplicate)."""
+    conn = _resolve_conn(db_or_conn)
     row = conn.execute(
         "SELECT 1 FROM import_hashes WHERE hash = ?", (hash,)
     ).fetchone()
     return row is not None
 
 
-def store_import_hash(conn: sqlite3.Connection, hash: str, source: str) -> None:
+def store_import_hash(db_or_conn, hash: str, source: str) -> None:
     """Store a transaction hash for duplicate detection."""
+    conn = _resolve_conn(db_or_conn)
     conn.execute(
         """INSERT OR IGNORE INTO import_hashes (hash, source_file)
            VALUES (?, ?)""",
@@ -349,12 +367,69 @@ def get_import_profiles(conn: sqlite3.Connection) -> list[ImportProfile]:
 
 
 # ---------------------------------------------------------------------------
-# Legacy compatibility stubs
-#
-# These exist so that other modules (screens, ai) that were scaffolded
-# with the old API signatures can still import these names without
-# breaking at collection time. They will be updated in later phases
-# when those modules are rewritten.
+# Import history queries
+# ---------------------------------------------------------------------------
+
+
+def record_import(
+    db_or_conn,
+    csv_filename: str,
+    profile_id: int | None = None,
+    txn_count: int = 0,
+    duplicate_count: int = 0,
+) -> ImportHistory:
+    """Record a CSV import event in import_history.
+
+    Args:
+        db_or_conn: A Database object or sqlite3.Connection.
+        csv_filename: The name/path of the imported CSV file.
+        profile_id: Optional import profile id.
+        txn_count: Number of transactions imported.
+        duplicate_count: Number of duplicates skipped.
+
+    Returns:
+        ImportHistory dataclass with the new row's id populated.
+    """
+    conn = _resolve_conn(db_or_conn)
+    cursor = conn.execute(
+        """INSERT INTO import_history (profile_id, file_path, imported_count, duplicate_count)
+           VALUES (?, ?, ?, ?)""",
+        (profile_id if profile_id else None, csv_filename, txn_count, duplicate_count),
+    )
+    conn.commit()
+    row_id = cursor.lastrowid
+    # Fetch the full row to populate imported_at
+    row = conn.execute(
+        "SELECT * FROM import_history WHERE id = ?", (row_id,)
+    ).fetchone()
+    return ImportHistory.from_row(row)
+
+
+def store_import_hashes(
+    db_or_conn,
+    hashes: list[str],
+    source: str | int,
+) -> None:
+    """Bulk insert transaction hashes for duplicate detection.
+
+    Args:
+        db_or_conn: A Database object or sqlite3.Connection.
+        hashes: List of hash strings to store.
+        source: Source identifier (file name or import history id).
+    """
+    conn = _resolve_conn(db_or_conn)
+    source_str = str(source)
+    for h in hashes:
+        conn.execute(
+            """INSERT OR IGNORE INTO import_hashes (hash, source_file)
+               VALUES (?, ?)""",
+            (h, source_str),
+        )
+    conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Lookup and utility helpers
 # ---------------------------------------------------------------------------
 
 from decimal import Decimal as _Decimal
@@ -424,9 +499,29 @@ def get_corrections_count(db_or_conn, description: str) -> int:
     return row[0] or 0 if row else 0
 
 
-def get_due_recurring(*args, **kwargs) -> list:
-    """Legacy stub -- will be replaced in a later phase."""
-    return []
+def get_due_recurring(db_or_conn, due_before: str | None = None) -> list[RecurringTransaction]:
+    """Return active recurring transactions due before the given date.
+
+    Args:
+        db_or_conn: A Database object or sqlite3.Connection.
+        due_before: ISO date string (YYYY-MM-DD). If None, returns all active.
+    """
+    conn = _resolve_conn(db_or_conn)
+    if due_before:
+        rows = conn.execute(
+            "SELECT * FROM recurring_transactions WHERE active = 1 AND next_due <= ? ORDER BY next_due",
+            (due_before,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM recurring_transactions WHERE active = 1 ORDER BY next_due"
+        ).fetchall()
+    return [RecurringTransaction.from_row(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Legacy compatibility stubs
+# ---------------------------------------------------------------------------
 
 
 def create_goal(*args, **kwargs):
@@ -464,16 +559,6 @@ def create_import_profile(*args, **kwargs):
     return None
 
 
-def record_import(*args, **kwargs):
-    """Legacy stub -- will be replaced in a later phase."""
-    return None
-
-
-def store_import_hashes(*args, **kwargs):
-    """Legacy stub -- will be replaced in a later phase."""
-    pass
-
-
 def record_reconciliation(*args, **kwargs):
     """Legacy stub -- will be replaced in a later phase."""
     pass
@@ -484,11 +569,42 @@ def get_last_reconciliation(*args, **kwargs):
     return None
 
 
-def cache_insights(*args, **kwargs):
-    """Legacy stub -- will be replaced in a later phase."""
-    pass
+def cache_insights(db_or_conn, period: str, content: str, source: str = "ai") -> None:
+    """Cache an AI insights result for a period.
+
+    Upserts into insights_cache, using a SHA-256 hash of the period
+    as the query_hash for uniqueness.
+    """
+    conn = _resolve_conn(db_or_conn)
+    query_hash = _hashlib.sha256(period.encode()).hexdigest()[:16]
+    conn.execute(
+        """INSERT INTO insights_cache (query_hash, query, response, period)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(query_hash) DO UPDATE SET
+               query = excluded.query,
+               response = excluded.response,
+               period = excluded.period,
+               created_at = datetime('now')""",
+        (query_hash, period, content, period),
+    )
+    conn.commit()
 
 
-def get_cached_insights(*args, **kwargs):
-    """Legacy stub -- will be replaced in a later phase."""
-    return None
+def get_cached_insights(db_or_conn, period: str) -> InsightsCacheEntry | None:
+    """Retrieve the most recent cached insights for a period.
+
+    Returns an InsightsCacheEntry with .content and .generated_at,
+    or None if no cached entry exists.
+    """
+    conn = _resolve_conn(db_or_conn)
+    row = conn.execute(
+        "SELECT response, created_at, period FROM insights_cache WHERE period = ? ORDER BY created_at DESC LIMIT 1",
+        (period,),
+    ).fetchone()
+    if row is None:
+        return None
+    return InsightsCacheEntry(
+        content=row["response"],
+        generated_at=row["created_at"],
+        period=row["period"],
+    )

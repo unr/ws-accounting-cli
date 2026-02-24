@@ -24,7 +24,7 @@ from textual.widgets import (
 )
 
 from ws_accounting.core.budget import (
-    BudgetStatus,
+    BudgetResult,
     calculate_budget_status,
     calculate_rollover,
 )
@@ -152,14 +152,9 @@ class AddBudgetModal(ModalScreen[dict | None]):
             self._existing.amount if self._existing else ""
         )
         rollover_on = (
-            self._existing.rollover
+            bool(self._existing.rollover)
             if self._existing
             else False
-        )
-        cap_value = (
-            self._existing.rollover_cap or ""
-            if self._existing
-            else ""
         )
 
         with Vertical(id="add-budget-container"):
@@ -192,17 +187,6 @@ class AddBudgetModal(ModalScreen[dict | None]):
                     value=rollover_on, id="switch-rollover"
                 )
 
-            with Horizontal(classes="form-row"):
-                yield Static(
-                    "Rollover Cap", classes="form-label"
-                )
-                yield Input(
-                    value=cap_value,
-                    placeholder="(optional) e.g. 200.00",
-                    id="input-rollover-cap",
-                    classes="form-field",
-                )
-
             with Horizontal(id="modal-buttons"):
                 yield Button(
                     "Cancel",
@@ -233,12 +217,6 @@ class AddBudgetModal(ModalScreen[dict | None]):
         rollover = self.query_one(
             "#switch-rollover", Switch
         ).value
-        cap_raw = (
-            self.query_one("#input-rollover-cap", Input)
-            .value.strip()
-            .replace(",", "")
-            .lstrip("$")
-        )
 
         if not cat:
             self.notify(
@@ -253,23 +231,10 @@ class AddBudgetModal(ModalScreen[dict | None]):
             )
             return
 
-        cap: str | None = None
-        if cap_raw:
-            try:
-                Decimal(cap_raw)
-                cap = cap_raw
-            except (InvalidOperation, ValueError):
-                self.notify(
-                    "Invalid rollover cap.",
-                    severity="warning",
-                )
-                return
-
         self.dismiss({
             "category": cat,
             "amount": amt_raw,
             "rollover": rollover,
-            "rollover_cap": cap,
         })
 
     def action_cancel(self) -> None:
@@ -312,7 +277,7 @@ class BudgetsScreen(Screen):
         self._db: Database | None = None
         self._month: str = _current_month()
         self._budgets: list[Budget] = []
-        self._budget_statuses: list[BudgetStatus] = []
+        self._budget_statuses: list[BudgetResult] = []
         self._goals: list[Goal] = []
         self._recurring: list[RecurringTransaction] = []
 
@@ -418,9 +383,9 @@ class BudgetsScreen(Screen):
         self._render_recurring()
         self._update_month_label()
 
-    def _compute_statuses(self) -> list[BudgetStatus]:
-        """Compute BudgetStatus for each budget category."""
-        statuses: list[BudgetStatus] = []
+    def _compute_statuses(self) -> list[BudgetResult]:
+        """Compute BudgetResult for each budget category."""
+        statuses: list[BudgetResult] = []
         prev_month = _prev_month(self._month)
         prev_budgets = (
             get_budgets(self._db, prev_month)
@@ -441,28 +406,16 @@ class BudgetsScreen(Screen):
                 prev = prev_map.get(budget.category)
                 if prev is not None:
                     prev_budgeted = Decimal(prev.amount)
-                    cap = (
-                        Decimal(prev.rollover_cap)
-                        if prev.rollover_cap
-                        else None
-                    )
                     rollover = calculate_rollover(
                         prev_budgeted,
                         Decimal("0"),  # prev spent unknown
-                        cap,
                     )
 
-            cap = (
-                Decimal(budget.rollover_cap)
-                if budget.rollover_cap
-                else None
-            )
             status = calculate_budget_status(
                 category=budget.category,
-                budgeted=budgeted,
-                spent=spent,
+                budget_amount=budgeted,
+                spent_amount=spent,
                 rollover=rollover,
-                rollover_cap=cap,
             )
             statuses.append(status)
 
@@ -476,7 +429,7 @@ class BudgetsScreen(Screen):
         Args:
             spending: Mapping of category -> spent amount.
         """
-        updated: list[BudgetStatus] = []
+        updated: list[BudgetResult] = []
         prev_month = _prev_month(self._month)
         prev_budgets = (
             get_budgets(self._db, prev_month)
@@ -497,26 +450,15 @@ class BudgetsScreen(Screen):
                     prev_spent = spending.get(
                         prev.category, Decimal("0")
                     )
-                    cap = (
-                        Decimal(prev.rollover_cap)
-                        if prev.rollover_cap
-                        else None
-                    )
                     rollover = calculate_rollover(
-                        prev_budgeted, prev_spent, cap
+                        prev_budgeted, prev_spent
                     )
 
-            cap = (
-                Decimal(budget.rollover_cap)
-                if budget.rollover_cap
-                else None
-            )
             status = calculate_budget_status(
                 category=budget.category,
-                budgeted=budgeted,
-                spent=spent,
+                budget_amount=budgeted,
+                spent_amount=spent,
                 rollover=rollover,
-                rollover_cap=cap,
             )
             updated.append(status)
 
@@ -551,20 +493,19 @@ class BudgetsScreen(Screen):
         for status in self._budget_statuses:
             bar = BudgetBar(
                 category=status.category,
-                budgeted=status.budgeted,
-                spent=status.spent,
-                percentage=status.percentage,
+                spent=status.spent_amount,
+                budget=status.budget_amount,
             )
             container.mount(bar)
 
     def _render_summary(self) -> None:
         """Update the summary stats."""
         total_budgeted = sum(
-            (s.budgeted for s in self._budget_statuses),
+            (s.budget_amount for s in self._budget_statuses),
             Decimal("0"),
         )
         total_spent = sum(
-            (s.spent for s in self._budget_statuses),
+            (s.spent_amount for s in self._budget_statuses),
             Decimal("0"),
         )
         total_remaining = total_budgeted - total_spent
@@ -673,39 +614,6 @@ class BudgetsScreen(Screen):
         elif event.button.id == "btn-next-month":
             self._navigate_month(1)
 
-    def on_budget_bar_budget_edited(
-        self, event: BudgetBar.BudgetEdited
-    ) -> None:
-        """Handle inline budget edit from a BudgetBar."""
-        if self._db is None:
-            return
-        # Find existing budget for rollover state
-        existing = next(
-            (
-                b
-                for b in self._budgets
-                if b.category == event.category
-            ),
-            None,
-        )
-        rollover = existing.rollover if existing else False
-        cap = existing.rollover_cap if existing else None
-
-        upsert_budget(
-            self._db,
-            category=event.category,
-            month=self._month,
-            amount=str(event.new_amount),
-            rollover=rollover,
-            rollover_cap=cap,
-        )
-        self.notify(
-            f"Updated {event.category} to"
-            f" ${event.new_amount:,.2f}",
-            title="Budget Updated",
-        )
-        self._load_data()
-
     # ---- Actions -----------------------------------------------------
 
     def action_add_budget(self) -> None:
@@ -721,14 +629,23 @@ class BudgetsScreen(Screen):
         """Handle modal result from add/edit budget."""
         if result is None or self._db is None:
             return
-        upsert_budget(
-            self._db,
+        budget = Budget(
             category=result["category"],
-            month=self._month,
             amount=result["amount"],
-            rollover=result["rollover"],
-            rollover_cap=result.get("rollover_cap"),
+            rollover=1 if result["rollover"] else 0,
         )
+        # Check if a budget for this category already exists
+        existing = next(
+            (
+                b
+                for b in self._budgets
+                if b.category == result["category"]
+            ),
+            None,
+        )
+        if existing is not None:
+            budget.id = existing.id
+        upsert_budget(self._db, budget)
         self.notify(
             f"Budget saved for {result['category']}",
             title="Budget Saved",

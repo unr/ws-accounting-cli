@@ -27,6 +27,11 @@ class BudgetBar(Static):
         self._spent = spent
         self._budget = budget
 
+    @property
+    def category(self) -> str:
+        """Return the budget category name."""
+        return self._category
+
     def on_mount(self) -> None:
         self._render()
 

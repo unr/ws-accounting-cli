@@ -323,9 +323,10 @@ class CSVImportScreen(Screen):
         if self._structure is None:
             return
 
-        cols = self._structure.columns
+        headers = self._structure.headers
         options = [
-            (f"{c.index}: {c.header}", c.index) for c in cols
+            (f"{i}: {header}", i)
+            for i, header in enumerate(headers)
         ]
 
         date_sel = self.query_one("#date-col-select", Select)
@@ -338,30 +339,16 @@ class CSVImportScreen(Screen):
         desc_sel.set_options(options)
         amount_sel.set_options(options)
 
-        if self._structure.date_column is not None:
-            date_sel.value = self._structure.date_column
-        if self._structure.description_column is not None:
-            desc_sel.value = self._structure.description_column
-        if self._structure.amount_column is not None:
-            amount_sel.value = self._structure.amount_column
+        date_sel.value = self._structure.date_column
+        desc_sel.value = self._structure.description_column
+        amount_sel.value = self._structure.amount_column
 
         # Show detected info
         info = self.query_one("#detected-info", Static)
-        n_cols = len(cols)
-        sample_preview = ""
-        if cols and cols[0].sample_values:
-            first_row_vals = [
-                c.sample_values[0] if c.sample_values else ""
-                for c in cols
-            ]
-            sample_preview = (
-                "\nSample row: "
-                + " | ".join(first_row_vals[:6])
-            )
+        n_cols = len(headers)
         info.update(
             f"Detected {n_cols} columns, "
             f"delimiter='{self._structure.delimiter}'"
-            f"{sample_preview}"
         )
 
     # ------------------------------------------------------------------
@@ -429,8 +416,8 @@ class CSVImportScreen(Screen):
                 ):
                     h = compute_import_hash(
                         row["date"],
-                        row["amount"],
                         row["description"],
+                        row["amount"],
                     )
                     if check_import_hash(app.database, h):
                         existing_hashes.add(h)
@@ -469,14 +456,14 @@ class CSVImportScreen(Screen):
 
         # Build sets for quick lookup
         dup_indices = {
-            d.row_index
-            for d in self._dup_results
+            i
+            for i, d in enumerate(self._dup_results)
             if d.is_duplicate
         }
         transfer_indices: set[int] = set()
         for tc in self._transfer_candidates:
-            transfer_indices.add(tc.row_index_a)
-            transfer_indices.add(tc.row_index_b)
+            transfer_indices.add(tc.from_idx)
+            transfer_indices.add(tc.to_idx)
 
         valid_rows = [
             r
@@ -610,8 +597,8 @@ class CSVImportScreen(Screen):
 
         # Build set of duplicate indices to skip
         dup_indices = {
-            d.row_index
-            for d in self._dup_results
+            i
+            for i, d in enumerate(self._dup_results)
             if d.is_duplicate
         }
 
@@ -683,7 +670,7 @@ class CSVImportScreen(Screen):
 
             # Compute hash for dedup tracking
             h = compute_import_hash(
-                row["date"], row["amount"], row["description"]
+                row["date"], row["description"], row["amount"]
             )
             imported_hashes.append(h)
 
