@@ -44,7 +44,7 @@ OnboardingScreen {
     padding: 1 4;
     height: 1fr;
     max-width: 90;
-    margin: 0 auto;
+    margin: 0;
 }
 
 .step-title {

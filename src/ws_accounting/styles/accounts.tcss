@@ -84,7 +84,7 @@ AccountsScreen {
     border: round $panel;
     text-align: center;
     color: $text-muted;
-    margin: 4 auto;
+    margin: 4 0;
     content-align: center middle;
 }
 
@@ -95,5 +95,5 @@ AccountsScreen {
     padding: 2 4;
     border: round $primary;
     text-align: center;
-    margin: 4 auto;
+    margin: 4 0;
 }

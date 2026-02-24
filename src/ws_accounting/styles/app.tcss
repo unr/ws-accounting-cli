@@ -63,5 +63,5 @@ OnboardingScreen #onboarding-welcome {
 }
 
 OnboardingScreen Button {
-    margin: 1 auto;
+    margin: 1 0;
 }
