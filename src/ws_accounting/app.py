@@ -32,7 +32,7 @@ TAB_TO_MODE: dict[str, str] = {
 }
 
 
-class WSAccountingApp(App):
+class WsAccountingApp(App):
     """Personal finance TUI built with Textual + hledger."""
 
     TITLE = "ws-accounting"
@@ -103,12 +103,10 @@ class WSAccountingApp(App):
 
     def _init_gateway(self) -> None:
         """Create the hledger gateway from config."""
-        journal_path = self._config.journal_path
-        if not journal_path:
-            journal_path = str(default_journal_dir() / "main.journal")
-        self._gateway = HLedgerGateway(
-            journal_path=Path(journal_path),
-        )
+        journal_dir = self._config.journal_dir
+        if not journal_dir:
+            journal_dir = default_journal_dir()
+        self._gateway = HLedgerGateway()
 
     # ---------------------------------------------------------------
     # Properties for screen access

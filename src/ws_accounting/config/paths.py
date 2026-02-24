@@ -36,3 +36,8 @@ def get_default_journal_dir() -> Path:
 def get_config_file() -> Path:
     """Return the path to the TOML configuration file."""
     return get_config_dir() / "config.toml"
+
+
+# Aliases used by app.py
+database_path = get_db_path
+default_journal_dir = get_default_journal_dir

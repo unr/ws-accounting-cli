@@ -204,9 +204,36 @@ def get_cached_category(
     return CategorizationEntry.from_row(row)
 
 
-def cache_category(conn: sqlite3.Connection, entry: CategorizationEntry) -> None:
-    """Cache a categorization result (upsert on description_hash)."""
-    conn.execute(
+def cache_category(conn_or_db, entry_or_desc=None, bucket=None, account=None, confidence=None, source=None) -> None:
+    """Cache a categorization result (upsert on description_hash).
+
+    Accepts two call forms:
+      cache_category(conn, CategorizationEntry)
+      cache_category(db, description, bucket, account, confidence, source)
+    """
+    if isinstance(entry_or_desc, CategorizationEntry):
+        # Form 1: (conn, entry)
+        conn = conn_or_db if isinstance(conn_or_db, sqlite3.Connection) else conn_or_db
+        entry = entry_or_desc
+    else:
+        # Form 2: (db, desc, bucket, account, confidence, source)
+        conn = _resolve_conn(conn_or_db)
+        desc = entry_or_desc
+        entry = CategorizationEntry(
+            description_hash=_desc_hash(desc, bucket or ""),
+            description=desc,
+            amount_bucket=bucket,
+            suggested_account=account or "expenses:other",
+            confidence=confidence or 0.0,
+            source=source or "ai",
+        )
+
+    if isinstance(conn, sqlite3.Connection):
+        real_conn = conn
+    else:
+        real_conn = conn.connect() if hasattr(conn, 'connect') else conn
+
+    real_conn.execute(
         """INSERT INTO categorization_cache
            (description_hash, description, amount_bucket, suggested_account,
             confidence, source, used_count)
@@ -225,25 +252,37 @@ def cache_category(conn: sqlite3.Connection, entry: CategorizationEntry) -> None
             entry.suggested_account,
             entry.confidence,
             entry.source,
-            entry.used_count,
+            entry.used_count if hasattr(entry, 'used_count') and entry.used_count else 1,
         ),
     )
-    conn.commit()
+    real_conn.commit()
 
 
 def record_correction(
-    conn: sqlite3.Connection,
+    conn_or_db,
     original_desc: str,
     original_acct: str,
     corrected_acct: str,
 ) -> None:
     """Record a user correction to a categorization."""
-    conn.execute(
-        """INSERT INTO categorization_corrections
-           (original_description, original_account, corrected_account)
-           VALUES (?, ?, ?)""",
-        (original_desc, original_acct, corrected_acct),
-    )
+    conn = _resolve_conn(conn_or_db)
+    # Upsert: increment count if same correction exists
+    existing = conn.execute(
+        "SELECT id, correction_count FROM categorization_corrections WHERE original_description = ? AND corrected_account = ?",
+        (original_desc, corrected_acct),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE categorization_corrections SET correction_count = correction_count + 1, updated_at = datetime('now') WHERE id = ?",
+            (existing[0],),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO categorization_corrections
+               (original_description, original_account, corrected_account, correction_count)
+               VALUES (?, ?, ?, 1)""",
+            (original_desc, original_acct, corrected_acct),
+        )
     conn.commit()
 
 
@@ -319,6 +358,15 @@ def get_import_profiles(conn: sqlite3.Connection) -> list[ImportProfile]:
 # ---------------------------------------------------------------------------
 
 from decimal import Decimal as _Decimal
+import hashlib as _hashlib
+
+
+def _resolve_conn(db_or_conn):
+    """Accept either a Database object or sqlite3.Connection."""
+    if isinstance(db_or_conn, sqlite3.Connection):
+        return db_or_conn
+    # Assume it's a Database wrapper with .connect()
+    return db_or_conn.connect()
 
 
 def amount_to_bucket(amount: _Decimal) -> str:
@@ -334,14 +382,46 @@ def amount_to_bucket(amount: _Decimal) -> str:
         return "$500+"
 
 
-def lookup_category(*args, **kwargs):
-    """Legacy stub -- will be replaced in a later phase."""
+def _desc_hash(description: str, bucket: str) -> str:
+    key = f"{description.lower().strip()}|{bucket}"
+    return _hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+class _CacheResult:
+    """Lightweight result from cache lookup."""
+
+    def __init__(self, account: str, confidence: float, source: str = "ai"):
+        self.account = account
+        self.confidence = confidence
+        self.source = source
+
+
+def lookup_category(db_or_conn, description: str, bucket: str = ""):
+    """Look up a cached categorization. Returns object with .account/.confidence/.source or None."""
+    conn = _resolve_conn(db_or_conn)
+    dhash = _desc_hash(description, bucket)
+    row = conn.execute(
+        "SELECT suggested_account, confidence, source FROM categorization_cache WHERE description_hash = ?",
+        (dhash,),
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE categorization_cache SET used_count = used_count + 1 WHERE description_hash = ?",
+            (dhash,),
+        )
+        conn.commit()
+        return _CacheResult(row[0], row[1], row[2] if len(row) > 2 else "ai")
     return None
 
 
-def get_corrections_count(*args, **kwargs) -> int:
-    """Legacy stub -- will be replaced in a later phase."""
-    return 0
+def get_corrections_count(db_or_conn, description: str) -> int:
+    """Get total correction count for a description."""
+    conn = _resolve_conn(db_or_conn)
+    row = conn.execute(
+        "SELECT SUM(correction_count) FROM categorization_corrections WHERE original_description = ?",
+        (description,),
+    ).fetchone()
+    return row[0] or 0 if row else 0
 
 
 def get_due_recurring(*args, **kwargs) -> list:
