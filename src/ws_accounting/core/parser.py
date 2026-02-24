@@ -95,34 +95,36 @@ def parse_amounts(amounts: list[dict]) -> Amount | None:
 def parse_balance_report(
     data: dict | list,
 ) -> list[AccountBalance]:
-    """Parse hledger balance JSON output into AccountBalance list."""
+    """Parse hledger balance JSON output into AccountBalance list.
+
+    hledger ``balance --output-format=json`` returns::
+
+        [
+          [                                       # rows list
+            [short_name, full_name, depth, [amounts]],
+            ...
+          ],
+          [total_amount, ...]                     # totals list
+        ]
+    """
     results: list[AccountBalance] = []
 
-    if isinstance(data, list):
-        # Simple balance output: list of [amounts, account_name]
-        for item in data:
-            if isinstance(item, list) and len(item) >= 2:
-                amounts_data, account_name = item[0], item[1]
-                if isinstance(amounts_data, list) and amounts_data:
-                    amount = parse_amount(amounts_data[0])
-                else:
-                    amount = Amount(Decimal("0"), "$")
-                results.append(AccountBalance(
-                    account=account_name,
-                    balance=amount,
-                ))
-    elif isinstance(data, dict):
-        # Compound balance report (balancesheet, incomestatement)
-        for row in data.get("rows", []):
-            account = row.get("account", "")
-            amounts_data = row.get("amounts", [])
-            if amounts_data:
-                amount = parse_amount(amounts_data[0])
-            else:
-                amount = Amount(Decimal("0"), "$")
-            results.append(AccountBalance(
-                account=account, balance=amount
-            ))
+    if isinstance(data, list) and len(data) == 2:
+        rows, _totals = data
+        if isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, list) and len(row) >= 4:
+                    # [short_name, full_name, depth, amounts]
+                    account_name = row[1]  # full account name
+                    amounts_data = row[3]
+                    if isinstance(amounts_data, list) and amounts_data:
+                        amount = parse_amount(amounts_data[0])
+                    else:
+                        amount = Amount(Decimal("0"), "$")
+                    results.append(AccountBalance(
+                        account=account_name,
+                        balance=amount,
+                    ))
 
     return results
 

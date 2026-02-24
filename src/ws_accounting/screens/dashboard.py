@@ -163,23 +163,25 @@ class DashboardScreen(Screen):
                 period="thismonth",
             )
             data = json.loads(raw)
-            # incomestatement JSON has subreports
             income_total = Decimal("0")
             expense_total = Decimal("0")
             commodity = "$"
 
-            # Parse the compound report
-            for subreport in data:
-                if not isinstance(subreport, dict):
+            # hledger incomestatement JSON is a compound balance report:
+            # {"cbrSubreports": [["Title", {prTotals: ...}, bool], ...], ...}
+            for subreport in data.get("cbrSubreports", []):
+                if not isinstance(subreport, list) or len(subreport) < 2:
                     continue
-                title = subreport.get("title", "").lower()
-                totals = subreport.get("totals", {})
-                row_totals = totals.get("row_total", [])
+                title = subreport[0].lower()
+                report_data = subreport[1]
+                if not isinstance(report_data, dict):
+                    continue
+                totals = report_data.get("prTotals", {})
+                row_totals = totals.get("prrTotal", [])
                 if row_totals:
                     amt = parse_amount(row_totals[0])
                     commodity = amt.commodity
                     if "income" in title or "revenue" in title:
-                        # hledger shows income as negative
                         income_total = abs(amt.quantity)
                     elif "expense" in title:
                         expense_total = abs(amt.quantity)
@@ -248,9 +250,10 @@ class DashboardScreen(Screen):
     async def _fetch_recent(self) -> None:
         """Fetch the last 5 transactions."""
         try:
-            raw = await self._gateway.register(limit=5)
+            raw = await self._gateway.print_journal(json_format=True)
             data = json.loads(raw)
-            transactions = parse_register(data)
+            all_txns = parse_register(data)
+            transactions = all_txns[-5:] if len(all_txns) > 5 else all_txns
 
             container = self.query_one("#recent-txns", Container)
             container.remove_children()

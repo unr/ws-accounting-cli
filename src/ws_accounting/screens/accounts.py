@@ -202,12 +202,13 @@ class AccountsScreen(Screen):
         container.remove_children()
 
         try:
-            raw = await self._gateway.register(
+            raw = await self._gateway.print_journal(
                 query=f"acct:{account}",
-                limit=10,
+                json_format=True,
             )
             data = json.loads(raw)
             transactions = parse_register(data)
+            transactions = transactions[-10:]
 
             if not transactions:
                 container.mount(

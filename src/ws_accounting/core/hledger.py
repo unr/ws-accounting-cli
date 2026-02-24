@@ -120,14 +120,11 @@ class HLedgerGateway:
         self,
         query: str | None = None,
         period: str | None = None,
-        limit: int | None = None,
     ) -> str:
         """Run hledger register and return JSON string."""
         args = ["register"]
         if period:
             args.extend(["-p", period])
-        if limit is not None:
-            args.extend(["-n", str(limit)])
         if query:
             args.append(query)
         return await self._run(*args)
@@ -158,13 +155,18 @@ class HLedgerGateway:
         ]
 
     async def print_journal(
-        self, query: str | None = None
+        self,
+        query: str | None = None,
+        period: str | None = None,
+        json_format: bool = False,
     ) -> str:
         """Print journal entries."""
         args = ["print"]
+        if period:
+            args.extend(["-p", period])
         if query:
             args.append(query)
-        return await self._run(*args, json_output=False)
+        return await self._run(*args, json_output=json_format)
 
     async def check(self) -> bool:
         """Validate journal integrity. Returns True if valid."""

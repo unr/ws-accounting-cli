@@ -472,9 +472,10 @@ class TransactionsScreen(Screen):
             return
 
         try:
-            raw = await self._gateway.register(
+            raw = await self._gateway.print_journal(
                 query=self._current_query or None,
                 period=self._current_period or None,
+                json_format=True,
             )
             data = json.loads(raw)
             transactions = parse_register(data)
