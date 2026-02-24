@@ -1,0 +1,115 @@
+/* Global application styles for ws-accounting. */
+
+Screen {
+    background: $background;
+}
+
+.compact-only {
+    display: block;
+}
+.enhanced-only {
+    display: none;
+}
+
+.section-title {
+    text-style: bold;
+    margin-bottom: 1;
+    color: $text;
+}
+
+.card {
+    border: round $primary;
+    padding: 1 2;
+    margin: 0 1;
+    height: auto;
+}
+
+/* Amount colors -- accessible blue/orange */
+.amount-positive,
+.amount--positive {
+    color: $success;
+}
+
+.amount-negative,
+.amount--negative {
+    color: $error;
+}
+
+.amount-warning {
+    color: $warning;
+}
+
+.amount--zero {
+    color: $text-muted;
+}
+
+/* Confidence indicators */
+.confidence--high {
+    color: $success;
+}
+
+.confidence--medium {
+    color: $warning;
+}
+
+.confidence--low {
+    color: $error;
+}
+
+/* Responsive grid helpers */
+.grid-2x2 {
+    layout: grid;
+    grid-size: 2;
+    grid-gutter: 1;
+}
+
+.grid-4x1 {
+    layout: grid;
+    grid-size: 4;
+    grid-gutter: 1;
+}
+
+/* Empty state styling */
+.empty-state {
+    align: center middle;
+    text-align: center;
+    color: $text-muted;
+    padding: 4 8;
+}
+
+/* Loading overlay */
+.loading-indicator {
+    align: center middle;
+    text-align: center;
+}
+
+/* Placeholder screen centering */
+.screen-placeholder {
+    width: auto;
+    height: auto;
+    padding: 2 4;
+    border: round $primary;
+    text-align: center;
+}
+
+/* Screens with placeholder content get centered layout */
+SettingsScreen {
+    align: center middle;
+}
+
+OnboardingScreen {
+    align: center middle;
+}
+
+OnboardingScreen #onboarding-welcome {
+    width: auto;
+    height: auto;
+    padding: 2 4;
+    border: round $primary;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+OnboardingScreen Button {
+    margin: 1 0;
+}
