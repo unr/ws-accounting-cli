@@ -1,4 +1,4 @@
-"""Domain models — immutable dataclasses for all financial data."""
+"""Domain models -- immutable dataclasses for all financial data."""
 
 from dataclasses import dataclass, field
 from datetime import date
@@ -7,61 +7,72 @@ from enum import Enum
 
 
 class TransactionStatus(Enum):
-    UNMARKED = ""        # Just entered, not verified
-    PENDING = "!"        # Seen on statement, not fully reconciled
-    CLEARED = "*"        # Verified against bank statement
+    UNMARKED = ""
+    PENDING = "!"
+    CLEARED = "*"
 
 
 @dataclass(frozen=True)
 class Amount:
     quantity: Decimal
-    commodity: str              # "$", "EUR", etc.
+    commodity: str  # "$", "EUR", etc.
+
+    def __str__(self) -> str:
+        if self.commodity == "$":
+            sign = "-" if self.quantity < 0 else ""
+            return f"{sign}${abs(self.quantity):,.2f}"
+        return f"{self.quantity} {self.commodity}"
+
+    def __neg__(self) -> "Amount":
+        return Amount(-self.quantity, self.commodity)
+
+    def __add__(self, other: "Amount") -> "Amount":
+        if self.commodity != other.commodity:
+            raise ValueError(f"Cannot add {self.commodity} and {other.commodity}")
+        return Amount(self.quantity + other.quantity, self.commodity)
 
 
 @dataclass(frozen=True)
 class Posting:
-    account: str                # e.g., "expenses:food:groceries"
-    amount: Amount | None       # None only for the single auto-balanced posting
-    balance_assertion: Amount | None = None  # e.g., = $1,234.56
+    account: str
+    amount: Amount | None  # None only for single auto-balanced posting
+    balance_assertion: Amount | None = None
     comment: str | None = None
 
 
 @dataclass(frozen=True)
 class Transaction:
     date: date
-    status: TransactionStatus
     description: str
     postings: tuple[Posting, ...]
-    date2: date | None = None          # Auxiliary/effective date
+    status: TransactionStatus = TransactionStatus.UNMARKED
+    date2: date | None = None
     payee: str | None = None
     comment: str | None = None
-    tags: dict[str, str] = field(default_factory=dict)
+    tags: dict[str, str] | None = None
     source_file: str | None = None
     source_line: int | None = None
 
     def validate(self) -> None:
-        """Enforce double-entry invariants before any journal write.
+        """Validate transaction: at most 1 None-amount posting.
 
-        - At most one posting may have None amount
-        - If all amounts are explicit, they must sum to zero per commodity
+        If all explicit, must sum to zero per commodity.
         """
         none_count = sum(1 for p in self.postings if p.amount is None)
         if none_count > 1:
-            raise ValueError(
-                f"At most one posting may omit amount, found {none_count}"
-            )
-
+            raise ValueError("At most one posting may have an inferred (None) amount")
         if none_count == 0:
+            # All amounts explicit -- must balance per commodity
             sums: dict[str, Decimal] = {}
             for p in self.postings:
                 assert p.amount is not None
-                key = p.amount.commodity
-                sums[key] = sums.get(key, Decimal("0")) + p.amount.quantity
+                sums[p.amount.commodity] = (
+                    sums.get(p.amount.commodity, Decimal(0)) + p.amount.quantity
+                )
             for commodity, total in sums.items():
-                if total != Decimal("0"):
+                if total != Decimal(0):
                     raise ValueError(
-                        f"Transaction does not balance for"
-                        f" {commodity}: off by {total}"
+                        f"Transaction does not balance for {commodity}: {total}"
                     )
 
 
@@ -69,6 +80,6 @@ class Transaction:
 class CategorizedTransaction:
     original_description: str
     suggested_account: str
-    confidence: float           # 0.0 - 1.0
+    confidence: float  # 0.0 - 1.0
     reasoning: str | None = None
-    alternatives: list[str] = field(default_factory=list)
+    alternatives: list[str] | None = None

@@ -8,7 +8,8 @@ from ws_accounting.core.parser import (
     normalize_sign,
     parse_amount,
     parse_amounts,
-    parse_register,
+    parse_json_balance,
+    parse_json_transactions,
 )
 
 
@@ -75,13 +76,15 @@ class TestParseAmounts:
         assert parse_amounts([]) is None
 
     def test_single_amount(self) -> None:
-        data = [{
-            "acommodity": "$",
-            "aquantity": {
-                "decimalMantissa": 1000,
-                "decimalPlaces": 2,
-            },
-        }]
+        data = [
+            {
+                "acommodity": "$",
+                "aquantity": {
+                    "decimalMantissa": 1000,
+                    "decimalPlaces": 2,
+                },
+            }
+        ]
         amt = parse_amounts(data)
         assert amt is not None
         assert amt.quantity == Decimal("10.00")
@@ -115,32 +118,24 @@ class TestNormalizeSign:
         assert result == Decimal("500")
 
     def test_liabilities_negated(self) -> None:
-        result = normalize_sign(
-            Decimal("-1000"), "liabilities:credit"
-        )
+        result = normalize_sign(Decimal("-1000"), "liabilities:credit")
         assert result == Decimal("1000")
 
     def test_assets_unchanged(self) -> None:
-        result = normalize_sign(
-            Decimal("5000"), "assets:bank:checking"
-        )
+        result = normalize_sign(Decimal("5000"), "assets:bank:checking")
         assert result == Decimal("5000")
 
     def test_expenses_unchanged(self) -> None:
-        result = normalize_sign(
-            Decimal("85"), "expenses:food:groceries"
-        )
+        result = normalize_sign(Decimal("85"), "expenses:food:groceries")
         assert result == Decimal("85")
 
     def test_equity_unchanged(self) -> None:
-        result = normalize_sign(
-            Decimal("10000"), "equity:opening"
-        )
+        result = normalize_sign(Decimal("10000"), "equity:opening")
         assert result == Decimal("10000")
 
 
-class TestParseRegister:
-    SAMPLE_REGISTER_JSON = [
+class TestParseJsonTransactions:
+    SAMPLE_PRINT_JSON = [
         {
             "tdate": "2026-01-15",
             "tdate2": "",
@@ -149,25 +144,29 @@ class TestParseRegister:
             "tpostings": [
                 {
                     "paccount": "assets:bank:checking",
-                    "pamount": [{
-                        "acommodity": "$",
-                        "aquantity": {
-                            "decimalMantissa": 500000,
-                            "decimalPlaces": 2,
-                        },
-                    }],
+                    "pamount": [
+                        {
+                            "acommodity": "$",
+                            "aquantity": {
+                                "decimalMantissa": 500000,
+                                "decimalPlaces": 2,
+                            },
+                        }
+                    ],
                     "pcomment": "",
                     "pbalanceassertion": None,
                 },
                 {
                     "paccount": "income:salary",
-                    "pamount": [{
-                        "acommodity": "$",
-                        "aquantity": {
-                            "decimalMantissa": -500000,
-                            "decimalPlaces": 2,
-                        },
-                    }],
+                    "pamount": [
+                        {
+                            "acommodity": "$",
+                            "aquantity": {
+                                "decimalMantissa": -500000,
+                                "decimalPlaces": 2,
+                            },
+                        }
+                    ],
                     "pcomment": "monthly pay",
                     "pbalanceassertion": None,
                 },
@@ -189,25 +188,29 @@ class TestParseRegister:
             "tpostings": [
                 {
                     "paccount": "expenses:food:groceries",
-                    "pamount": [{
-                        "acommodity": "$",
-                        "aquantity": {
-                            "decimalMantissa": 8542,
-                            "decimalPlaces": 2,
-                        },
-                    }],
+                    "pamount": [
+                        {
+                            "acommodity": "$",
+                            "aquantity": {
+                                "decimalMantissa": 8542,
+                                "decimalPlaces": 2,
+                            },
+                        }
+                    ],
                     "pcomment": "",
                     "pbalanceassertion": None,
                 },
                 {
                     "paccount": "assets:bank:checking",
-                    "pamount": [{
-                        "acommodity": "$",
-                        "aquantity": {
-                            "decimalMantissa": -8542,
-                            "decimalPlaces": 2,
-                        },
-                    }],
+                    "pamount": [
+                        {
+                            "acommodity": "$",
+                            "aquantity": {
+                                "decimalMantissa": -8542,
+                                "decimalPlaces": 2,
+                            },
+                        }
+                    ],
                     "pcomment": "",
                     "pbalanceassertion": None,
                 },
@@ -224,11 +227,11 @@ class TestParseRegister:
     ]
 
     def test_parses_two_transactions(self) -> None:
-        txns = parse_register(self.SAMPLE_REGISTER_JSON)
+        txns = parse_json_transactions(self.SAMPLE_PRINT_JSON)
         assert len(txns) == 2
 
     def test_first_transaction_fields(self) -> None:
-        txns = parse_register(self.SAMPLE_REGISTER_JSON)
+        txns = parse_json_transactions(self.SAMPLE_PRINT_JSON)
         txn = txns[0]
         assert txn.date == date(2026, 1, 15)
         assert txn.status == TransactionStatus.CLEARED
@@ -240,7 +243,7 @@ class TestParseRegister:
         assert txn.source_line == 7
 
     def test_first_transaction_postings(self) -> None:
-        txns = parse_register(self.SAMPLE_REGISTER_JSON)
+        txns = parse_json_transactions(self.SAMPLE_PRINT_JSON)
         postings = txns[0].postings
         assert len(postings) == 2
         assert postings[0].account == "assets:bank:checking"
@@ -250,90 +253,239 @@ class TestParseRegister:
         assert postings[1].comment == "monthly pay"
 
     def test_second_transaction_status(self) -> None:
-        txns = parse_register(self.SAMPLE_REGISTER_JSON)
+        txns = parse_json_transactions(self.SAMPLE_PRINT_JSON)
         assert txns[1].status == TransactionStatus.PENDING
 
     def test_unmarked_status(self) -> None:
-        data = [{
-            "tdate": "2026-02-01",
-            "tdate2": "",
-            "tstatus": "",
-            "tdescription": "Test",
-            "tpostings": [],
-            "ttags": [],
-            "tcomment": "",
-            "tsourcepos": [],
-        }]
-        txns = parse_register(data)
+        data = [
+            {
+                "tdate": "2026-02-01",
+                "tdate2": "",
+                "tstatus": "",
+                "tdescription": "Test",
+                "tpostings": [],
+                "ttags": [],
+                "tcomment": "",
+                "tsourcepos": [],
+            }
+        ]
+        txns = parse_json_transactions(data)
         assert txns[0].status == TransactionStatus.UNMARKED
 
     def test_no_payee_separator(self) -> None:
-        txns = parse_register(self.SAMPLE_REGISTER_JSON)
-        # Second transaction has no "|" so no payee
+        txns = parse_json_transactions(self.SAMPLE_PRINT_JSON)
         assert txns[1].payee is None
         assert txns[1].description == "Whole Foods"
 
     def test_balance_assertion_parsing(self) -> None:
-        data = [{
-            "tdate": "2026-01-20",
-            "tdate2": "",
-            "tstatus": "Cleared",
-            "tdescription": "Balance check",
-            "tpostings": [{
-                "paccount": "assets:bank",
-                "pamount": [{
-                    "acommodity": "$",
-                    "aquantity": {
-                        "decimalMantissa": 0,
-                        "decimalPlaces": 2,
-                    },
-                }],
-                "pcomment": "",
-                "pbalanceassertion": {
-                    "baamount": {
-                        "acommodity": "$",
-                        "aquantity": {
-                            "decimalMantissa": 123456,
-                            "decimalPlaces": 2,
+        data = [
+            {
+                "tdate": "2026-01-20",
+                "tdate2": "",
+                "tstatus": "Cleared",
+                "tdescription": "Balance check",
+                "tpostings": [
+                    {
+                        "paccount": "assets:bank",
+                        "pamount": [
+                            {
+                                "acommodity": "$",
+                                "aquantity": {
+                                    "decimalMantissa": 0,
+                                    "decimalPlaces": 2,
+                                },
+                            }
+                        ],
+                        "pcomment": "",
+                        "pbalanceassertion": {
+                            "baamount": {
+                                "acommodity": "$",
+                                "aquantity": {
+                                    "decimalMantissa": 123456,
+                                    "decimalPlaces": 2,
+                                },
+                            },
                         },
-                    },
-                },
-            }],
-            "ttags": [],
-            "tcomment": "",
-            "tsourcepos": [],
-        }]
-        txns = parse_register(data)
+                    }
+                ],
+                "ttags": [],
+                "tcomment": "",
+                "tsourcepos": [],
+            }
+        ]
+        txns = parse_json_transactions(data)
         posting = txns[0].postings[0]
         assert posting.balance_assertion is not None
         assert posting.balance_assertion.quantity == Decimal("1234.56")
         assert posting.balance_assertion.commodity == "$"
 
     def test_empty_sourcepos(self) -> None:
-        data = [{
-            "tdate": "2026-01-20",
-            "tdate2": "",
-            "tstatus": "",
-            "tdescription": "Test",
-            "tpostings": [],
-            "ttags": [],
-            "tcomment": "",
-            "tsourcepos": [],
-        }]
-        txns = parse_register(data)
+        data = [
+            {
+                "tdate": "2026-01-20",
+                "tdate2": "",
+                "tstatus": "",
+                "tdescription": "Test",
+                "tpostings": [],
+                "ttags": [],
+                "tcomment": "",
+                "tsourcepos": [],
+            }
+        ]
+        txns = parse_json_transactions(data)
         assert txns[0].source_file is None
         assert txns[0].source_line is None
 
     def test_date2_parsing(self) -> None:
-        data = [{
-            "tdate": "2026-01-15",
-            "tdate2": "2026-01-20",
-            "tstatus": "",
-            "tdescription": "Effective date test",
-            "tpostings": [],
-            "ttags": [],
-            "tcomment": "",
-            "tsourcepos": [],
-        }]
-        txns = parse_register(data)
+        data = [
+            {
+                "tdate": "2026-01-15",
+                "tdate2": "2026-01-20",
+                "tstatus": "",
+                "tdescription": "Effective date test",
+                "tpostings": [],
+                "ttags": [],
+                "tcomment": "",
+                "tsourcepos": [],
+            }
+        ]
+        txns = parse_json_transactions(data)
         assert txns[0].date2 == date(2026, 1, 20)
+
+
+class TestParseJsonBalance:
+    def test_simple_balance_list_format(self) -> None:
+        """Test the [[amounts, account_name], ...] format."""
+        data = [
+            [
+                [
+                    {
+                        "acommodity": "$",
+                        "aquantity": {
+                            "decimalMantissa": 500000,
+                            "decimalPlaces": 2,
+                        },
+                    }
+                ],
+                "assets:bank:checking",
+            ],
+            [
+                [
+                    {
+                        "acommodity": "$",
+                        "aquantity": {
+                            "decimalMantissa": 8542,
+                            "decimalPlaces": 2,
+                        },
+                    }
+                ],
+                "expenses:food:groceries",
+            ],
+        ]
+        result = parse_json_balance(data)
+        assert result["assets:bank:checking"] == Decimal("5000.00")
+        assert result["expenses:food:groceries"] == Decimal("85.42")
+
+    def test_income_sign_normalization(self) -> None:
+        """Income amounts should be negated (shown as positive)."""
+        data = [
+            [
+                [
+                    {
+                        "acommodity": "$",
+                        "aquantity": {
+                            "decimalMantissa": -500000,
+                            "decimalPlaces": 2,
+                        },
+                    }
+                ],
+                "income:salary",
+            ],
+        ]
+        result = parse_json_balance(data)
+        # Income is negative in hledger, should be shown as positive
+        assert result["income:salary"] == Decimal("5000.00")
+
+    def test_liability_sign_normalization(self) -> None:
+        """Liability amounts should be negated (shown as positive = amount owed)."""
+        data = [
+            [
+                [
+                    {
+                        "acommodity": "$",
+                        "aquantity": {
+                            "decimalMantissa": -200000,
+                            "decimalPlaces": 2,
+                        },
+                    }
+                ],
+                "liabilities:credit-card",
+            ],
+        ]
+        result = parse_json_balance(data)
+        assert result["liabilities:credit-card"] == Decimal("2000.00")
+
+    def test_asset_sign_unchanged(self) -> None:
+        """Asset amounts stay as-is."""
+        data = [
+            [
+                [
+                    {
+                        "acommodity": "$",
+                        "aquantity": {
+                            "decimalMantissa": 100000,
+                            "decimalPlaces": 2,
+                        },
+                    }
+                ],
+                "assets:savings",
+            ],
+        ]
+        result = parse_json_balance(data)
+        assert result["assets:savings"] == Decimal("1000.00")
+
+    def test_expense_sign_unchanged(self) -> None:
+        """Expense amounts stay as-is."""
+        data = [
+            [
+                [
+                    {
+                        "acommodity": "$",
+                        "aquantity": {
+                            "decimalMantissa": 5000,
+                            "decimalPlaces": 2,
+                        },
+                    }
+                ],
+                "expenses:food",
+            ],
+        ]
+        result = parse_json_balance(data)
+        assert result["expenses:food"] == Decimal("50.00")
+
+    def test_dict_row_format(self) -> None:
+        """Test the {account, amounts} row format from compound reports."""
+        data = [
+            {
+                "account": "assets:bank",
+                "amounts": [
+                    {
+                        "acommodity": "$",
+                        "aquantity": {
+                            "decimalMantissa": 300000,
+                            "decimalPlaces": 2,
+                        },
+                    }
+                ],
+            },
+        ]
+        result = parse_json_balance(data)
+        assert result["assets:bank"] == Decimal("3000.00")
+
+    def test_empty_amounts(self) -> None:
+        """Empty amounts list should result in zero."""
+        data = [
+            [[], "assets:empty"],
+        ]
+        result = parse_json_balance(data)
+        assert result["assets:empty"] == Decimal("0")

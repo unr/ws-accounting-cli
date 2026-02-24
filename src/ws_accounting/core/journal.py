@@ -1,5 +1,7 @@
 """Journal file read/write with atomic writes and file locking."""
 
+from __future__ import annotations
+
 import fcntl
 import os
 import tempfile
@@ -42,8 +44,9 @@ def format_transaction(txn: Transaction) -> str:
     parts.append(header)
 
     # Tags
-    for key, value in txn.tags.items():
-        parts.append(f"    ; {key}: {value}")
+    if txn.tags:
+        for key, value in txn.tags.items():
+            parts.append(f"    ; {key}: {value}")
 
     # Postings
     for posting in txn.postings:
@@ -62,56 +65,6 @@ def format_transaction(txn: Transaction) -> str:
     return "\n".join(parts)
 
 
-def write_transactions(
-    path: Path,
-    transactions: list[Transaction],
-    append: bool = True,
-) -> None:
-    """Write transactions to a journal file with atomic writes."""
-    content = "\n\n".join(
-        format_transaction(txn) for txn in transactions
-    )
-
-    if append and path.exists():
-        existing = path.read_text()
-        if not existing.endswith("\n"):
-            existing += "\n"
-        content = existing + "\n" + content + "\n"
-    else:
-        content = content + "\n"
-
-    atomic_write(path, content)
-
-
-def update_includes(
-    main_journal: Path, include_path: str
-) -> None:
-    """Add an include directive to the main journal if not present."""
-    directive = f"include {include_path}"
-
-    if main_journal.exists():
-        content = main_journal.read_text()
-        # Check if already included
-        for line in content.split("\n"):
-            if line.strip() == directive:
-                return
-        # Add include
-        if not content.endswith("\n"):
-            content += "\n"
-        content += directive + "\n"
-        atomic_write(main_journal, content)
-    else:
-        atomic_write(main_journal, directive + "\n")
-
-
-def create_backup(path: Path) -> Path:
-    """Create a .backup copy of a file. Returns backup path."""
-    backup = path.with_suffix(path.suffix + ".backup")
-    if path.exists():
-        backup.write_text(path.read_text())
-    return backup
-
-
 def atomic_write(path: Path, content: str) -> None:
     """Write content atomically: write to temp file, then os.replace."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -125,15 +78,133 @@ def atomic_write(path: Path, content: str) -> None:
         )
         os.write(fd, content.encode())
         os.close(fd)
-        fd = None  # Mark as closed so we don't double-close
+        fd = None
         os.replace(tmp_path, path)
-        tmp_path = None  # Replaced successfully, no cleanup needed
+        tmp_path = None
     except Exception:
         if fd is not None:
             os.close(fd)
         if tmp_path is not None and os.path.exists(tmp_path):
             os.unlink(tmp_path)
         raise
+
+
+def _locked_op(path: Path, operation: callable) -> None:
+    """Execute an operation under an advisory file lock."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        operation()
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
+        try:
+            lock_path.unlink()
+        except OSError:
+            pass
+
+
+def write_transactions(
+    path: Path,
+    transactions: list[Transaction],
+    append: bool = False,
+) -> None:
+    """Atomic write of transactions to a journal file with file locking.
+
+    If append=True and file exists, appends to existing content.
+    """
+    content = "\n\n".join(format_transaction(txn) for txn in transactions)
+
+    def _do_write() -> None:
+        nonlocal content
+        if append and path.exists():
+            existing = path.read_text()
+            if not existing.endswith("\n"):
+                existing += "\n"
+            final = existing + "\n" + content + "\n"
+        else:
+            final = content + "\n"
+        atomic_write(path, final)
+
+    _locked_op(path, _do_write)
+
+
+def append_transaction(path: Path, txn: Transaction) -> None:
+    """Append a single transaction to a journal file with locking."""
+
+    def _do_append() -> None:
+        existing = ""
+        if path.exists():
+            existing = path.read_text()
+        if existing and not existing.endswith("\n"):
+            existing += "\n"
+        new_content = existing + "\n" + format_transaction(txn) + "\n"
+        atomic_write(path, new_content)
+
+    _locked_op(path, _do_append)
+
+
+def ensure_includes(main_journal: Path, include_path: str) -> None:
+    """Add an ``include`` directive to the main journal if missing."""
+    directive = f"include {include_path}"
+
+    if main_journal.exists():
+        content = main_journal.read_text()
+        for line in content.split("\n"):
+            if line.strip() == directive:
+                return
+        if not content.endswith("\n"):
+            content += "\n"
+        content += directive + "\n"
+        atomic_write(main_journal, content)
+    else:
+        atomic_write(main_journal, directive + "\n")
+
+
+# Backward-compatible alias
+update_includes = ensure_includes
+
+
+def create_journal_structure(root: Path) -> None:
+    """Create the standard journal directory structure.
+
+    Creates:
+        root/
+            main.journal      (with include directives)
+            accounts.journal   (empty, for account declarations)
+            budgets.journal    (empty, for budget/periodic txns)
+    """
+    root.mkdir(parents=True, exist_ok=True)
+
+    # Create sub-journals
+    accounts_journal = root / "accounts.journal"
+    if not accounts_journal.exists():
+        accounts_journal.write_text("; Account declarations\n")
+
+    budgets_journal = root / "budgets.journal"
+    if not budgets_journal.exists():
+        budgets_journal.write_text("; Budget and periodic transactions\n")
+
+    # Create main journal with includes
+    main_journal = root / "main.journal"
+    if not main_journal.exists():
+        main_journal.write_text(
+            "; ws-accounting main journal\n"
+            "commodity $1,000.00\n"
+            "\n"
+            "include accounts.journal\n"
+            "include budgets.journal\n"
+        )
+
+
+def create_backup(path: Path) -> Path:
+    """Create a .backup copy of a file. Returns backup path."""
+    backup = path.with_suffix(path.suffix + ".backup")
+    if path.exists():
+        backup.write_text(path.read_text())
+    return backup
 
 
 class JournalLock:
@@ -158,7 +229,6 @@ class JournalLock:
             fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
             os.close(self._lock_fd)
             self._lock_fd = None
-            # Clean up lock file
             try:
                 self._lock_path.unlink()
             except OSError:
