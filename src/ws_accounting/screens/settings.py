@@ -20,6 +20,7 @@ from textual.widgets import (
 )
 
 from ws_accounting.config.settings import AppConfig
+from ws_accounting.widgets.nav_header import NavHeader
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 AI_MODEL_OPTIONS: list[tuple[str, str]] = [
+    ("Claude Sonnet 4", "claude-sonnet-4-20250514"),
     ("Claude Sonnet 4.5", "claude-sonnet-4-5-20250929"),
     ("Claude Haiku 4.5", "claude-haiku-4-5-20251001"),
 ]
@@ -69,6 +71,7 @@ class SettingsScreen(Screen):
         self._config: AppConfig = AppConfig.load()
 
     def compose(self) -> ComposeResult:
+        yield NavHeader()
         yield Static("Settings", id="settings-title")
 
         with TabbedContent(id="settings-tabs"):
@@ -76,23 +79,23 @@ class SettingsScreen(Screen):
             with TabPane("General", id="tab-general"):
                 with Vertical(classes="settings-form"):
                     yield Label(
-                        "Journal file path:",
+                        "Journal directory:",
                         classes="field-label",
                     )
                     yield Input(
-                        value=self._config.journal_path,
-                        placeholder="~/finances/main.journal",
-                        id="input-journal-path",
+                        value=str(self._config.journal_dir),
+                        placeholder="~/finances",
+                        id="input-journal-dir",
                     )
 
                     yield Label(
-                        "Data directory:",
+                        "Currency symbol:",
                         classes="field-label",
                     )
                     yield Input(
-                        value=self._config.data_dir,
-                        placeholder="(default: platform data dir)",
-                        id="input-data-dir",
+                        value=self._config.currency,
+                        placeholder="$",
+                        id="input-currency",
                     )
 
                     yield Label(
@@ -242,6 +245,7 @@ class SettingsScreen(Screen):
 
     def on_mount(self) -> None:
         """Reload config values into widgets on mount."""
+        self.query_one(NavHeader).set_active("settings")
         self._load_config_into_widgets()
 
     def _load_config_into_widgets(self) -> None:
@@ -249,11 +253,11 @@ class SettingsScreen(Screen):
         self._config = AppConfig.load()
 
         try:
-            self.query_one("#input-journal-path", Input).value = (
-                self._config.journal_path
+            self.query_one("#input-journal-dir", Input).value = (
+                str(self._config.journal_dir)
             )
-            self.query_one("#input-data-dir", Input).value = (
-                self._config.data_dir
+            self.query_one("#input-currency", Input).value = (
+                self._config.currency
             )
             self.query_one("#select-fiscal-month", Select).value = (
                 self._config.fiscal_year_start
@@ -332,12 +336,18 @@ class SettingsScreen(Screen):
 
     def _save_general(self) -> None:
         """Save general settings."""
-        self._config.journal_path = (
-            self.query_one("#input-journal-path", Input).value.strip()
+        from pathlib import Path
+
+        journal_dir_str = (
+            self.query_one("#input-journal-dir", Input).value.strip()
         )
-        self._config.data_dir = (
-            self.query_one("#input-data-dir", Input).value.strip()
+        if journal_dir_str:
+            self._config.journal_dir = Path(journal_dir_str)
+        currency_str = (
+            self.query_one("#input-currency", Input).value.strip()
         )
+        if currency_str:
+            self._config.currency = currency_str
         fiscal_sel = self.query_one("#select-fiscal-month", Select)
         if fiscal_sel.value is not Select.BLANK:
             self._config.fiscal_year_start = int(fiscal_sel.value)

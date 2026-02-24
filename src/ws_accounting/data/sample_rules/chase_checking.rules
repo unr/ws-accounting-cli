@@ -1,25 +1,45 @@
-; Chase checking account CSV rules
-; Typically: Details,Posting Date,Description,Amount,Type,Balance,Check or Slip #
+; Chase Checking CSV import rules
+; Columns: Details, Posting Date, Description, Amount, Type, Balance, Check or Slip #
 
 skip 1
 
 fields Details, date, description, amount, type, balance, _
 
 date-format %m/%d/%Y
-currency $
-account1 assets:bank:checking
 
-if PAYROLL
- account2 income:salary
+currency $
+
+account1 assets:checking
 
 if WHOLEFDS\|WHOLE FOODS
- account2 expenses:food:groceries
+    account2 expenses:food:groceries
+
+if TRADER JOE
+    account2 expenses:food:groceries
 
 if SHELL\|CHEVRON\|EXXON
- account2 expenses:transportation:gas
+    account2 expenses:transport:gas
 
 if NETFLIX
- account2 expenses:subscriptions
+    account2 expenses:entertainment:subscriptions
 
 if SPOTIFY
- account2 expenses:subscriptions
+    account2 expenses:entertainment:subscriptions
+
+if STARBUCKS
+    account2 expenses:food:coffee
+
+if CHIPOTLE\|OLIVE GARDEN
+    account2 expenses:food:dining
+
+if COMCAST\|XFINITY
+    account2 expenses:housing:internet
+
+if PG&E\|PGE
+    account2 expenses:housing:utilities
+
+if PLANET FITNESS
+    account2 expenses:personal:gym
+
+if AMAZON
+    account2 expenses:shopping:household

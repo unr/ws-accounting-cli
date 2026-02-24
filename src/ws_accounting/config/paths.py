@@ -1,4 +1,4 @@
-"""XDG-compliant path resolution using platformdirs."""
+"""XDG path resolution using platformdirs."""
 
 from pathlib import Path
 
@@ -6,38 +6,38 @@ from platformdirs import user_config_dir, user_data_dir
 
 
 APP_NAME = "ws-accounting"
-
-_config_dir = Path(user_config_dir(APP_NAME))
-_data_dir = Path(user_data_dir(APP_NAME))
+APP_AUTHOR = "ws-accounting"
 
 
-def config_dir() -> Path:
-    """Return the app config directory, creating it if needed."""
-    _config_dir.mkdir(parents=True, exist_ok=True)
-    return _config_dir
+def get_config_dir() -> Path:
+    """Return the user configuration directory for ws-accounting."""
+    path = Path(user_config_dir(APP_NAME, APP_AUTHOR))
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
-def data_dir() -> Path:
-    """Return the app data directory, creating it if needed."""
-    _data_dir.mkdir(parents=True, exist_ok=True)
-    return _data_dir
+def get_data_dir() -> Path:
+    """Return the user data directory for ws-accounting."""
+    path = Path(user_data_dir(APP_NAME, APP_AUTHOR))
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
-def config_file() -> Path:
-    """Return the path to the main config file (TOML)."""
-    return config_dir() / "config.toml"
+def get_db_path() -> Path:
+    """Return the path to the SQLite metadata database."""
+    return get_data_dir() / "metadata.db"
 
 
-def database_path() -> Path:
-    """Return the path to the SQLite sidecar database."""
-    return data_dir() / "metadata.db"
-
-
-def default_journal_dir() -> Path:
-    """Return the default journal directory (~//finances/)."""
+def get_default_journal_dir() -> Path:
+    """Return the default journal directory (~//finances)."""
     return Path.home() / "finances"
 
 
-def package_data_dir() -> Path:
-    """Return the path to bundled package data (default accounts, sample journals, rules)."""
-    return Path(__file__).parent.parent / "data"
+def get_config_file() -> Path:
+    """Return the path to the TOML configuration file."""
+    return get_config_dir() / "config.toml"
+
+
+# Aliases used by app.py
+database_path = get_db_path
+default_journal_dir = get_default_journal_dir

@@ -1,30 +1,28 @@
-"""Quick action buttons for the dashboard."""
+"""Dashboard quick action buttons."""
 
-from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.message import Message
-from textual.widget import Widget
-from textual.widgets import Button
+from textual.widgets import Button, Static
 
 
-class QuickActions(Widget):
-    """Row of buttons for common dashboard actions."""
+class QuickActions(Static):
+    """Row of quick action buttons for the dashboard."""
 
     DEFAULT_CSS = """
     QuickActions {
-        layout: horizontal;
         height: auto;
-        min-height: 3;
-        padding: 0 1;
-        align: left middle;
+        padding: 1 0;
+    }
+    QuickActions Horizontal {
+        height: auto;
     }
     QuickActions Button {
-        margin: 0 1 0 0;
-        min-width: 16;
+        margin: 0 1;
     }
     """
 
     class ImportCSV(Message):
-        """User wants to import a CSV file."""
+        """User wants to import a CSV."""
 
     class NewTransaction(Message):
         """User wants to create a new transaction."""
@@ -32,28 +30,17 @@ class QuickActions(Widget):
     class ViewAccounts(Message):
         """User wants to view accounts."""
 
-    def compose(self) -> ComposeResult:
-        yield Button(
-            "Import CSV",
-            id="btn-import-csv",
-            variant="primary",
-        )
-        yield Button(
-            "New Transaction",
-            id="btn-new-txn",
-            variant="default",
-        )
-        yield Button(
-            "View Accounts",
-            id="btn-view-accounts",
-            variant="default",
-        )
+    def compose(self):
+        with Horizontal():
+            yield Button("Import CSV", id="action-import", variant="primary")
+            yield Button("Add Transaction", id="action-add-txn")
+            yield Button("View Accounts", id="action-view-accounts")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Dispatch messages based on which button was pressed."""
-        if event.button.id == "btn-import-csv":
+        """Translate button presses into semantic messages."""
+        if event.button.id == "action-import":
             self.post_message(self.ImportCSV())
-        elif event.button.id == "btn-new-txn":
+        elif event.button.id == "action-add-txn":
             self.post_message(self.NewTransaction())
-        elif event.button.id == "btn-view-accounts":
+        elif event.button.id == "action-view-accounts":
             self.post_message(self.ViewAccounts())

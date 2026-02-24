@@ -1,41 +1,53 @@
-"""Navigation header with app title and tab bar."""
+"""Single-row Tabs navigation bar — replaces Header widget to save vertical space."""
 
-from textual.app import ComposeResult
-from textual.widget import Widget
-from textual.widgets import Tab, Tabs
+from textual.widgets import Tabs, Tab
+
 
 SCREEN_TABS = [
-    ("dashboard", "Dashboard"),
-    ("transactions", "Txns"),
-    ("csv_import", "Import"),
-    ("budgets", "Budget"),
-    ("reports", "Reports"),
-    ("insights", "AI"),
-    ("accounts", "Accts"),
-    ("settings", "Settings"),
+    ("Dashboard", "tab-dashboard"),
+    ("Trans", "tab-transactions"),
+    ("Import", "tab-import"),
+    ("Budget", "tab-budgets"),
+    ("Reports", "tab-reports"),
+    ("AI", "tab-ai"),
+    ("Accts", "tab-accounts"),
+    ("\u2699", "tab-settings"),  # gear icon
 ]
 
 
-class NavHeader(Widget):
-    """Persistent Tabs navigation bar."""
+class NavHeader(Tabs):
+    """Navigation tabs across the top of every screen."""
 
     DEFAULT_CSS = """
     NavHeader {
         dock: top;
-        height: 3;
+        height: 1;
     }
     """
 
-    def compose(self) -> ComposeResult:
-        yield Tabs(
-            *[
-                Tab(label, id=f"tab-{sid}")
-                for sid, label in SCREEN_TABS
-            ],
-            id="nav-tabs",
+    def __init__(self) -> None:
+        super().__init__(
+            *[Tab(label, id=tab_id) for label, tab_id in SCREEN_TABS],
         )
 
-    def set_active(self, screen_id: str) -> None:
-        """Activate the tab corresponding to the given screen id."""
-        tabs = self.query_one(Tabs)
-        tabs.active = f"tab-{screen_id}"
+    # Map screen/mode names to tab IDs for convenience
+    _NAME_TO_TAB: dict[str, str] = {
+        "dashboard": "tab-dashboard",
+        "transactions": "tab-transactions",
+        "csv_import": "tab-import",
+        "import": "tab-import",
+        "budgets": "tab-budgets",
+        "reports": "tab-reports",
+        "insights": "tab-ai",
+        "ai": "tab-ai",
+        "accounts": "tab-accounts",
+        "settings": "tab-settings",
+    }
+
+    def set_active(self, name: str) -> None:
+        """Set the active tab by screen/mode name or tab ID."""
+        tab_id = self._NAME_TO_TAB.get(name, name)
+        # If it still doesn't start with "tab-", add the prefix
+        if not tab_id.startswith("tab-"):
+            tab_id = f"tab-{tab_id}"
+        self.active = tab_id

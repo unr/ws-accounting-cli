@@ -1,40 +1,54 @@
-"""Database table models."""
+"""Database table dataclasses.
 
-from dataclasses import dataclass
+Each dataclass mirrors a table in the sidecar SQLite database.
+All monetary amounts are stored as TEXT strings, never floats.
+"""
+
+from dataclasses import dataclass, field
 import sqlite3
 
 
 @dataclass
 class Budget:
-    id: int | None
-    category: str
-    month: str
-    amount: str  # Decimal string e.g. "600.00"
-    rollover: bool
-    rollover_cap: str | None
+    """A budget period for a spending category."""
+
+    id: int | None = None
+    category: str = ""
+    amount: str = "0"  # TEXT for money
+    period: str = "monthly"  # "monthly", "quarterly", "yearly"
+    start_date: str | None = None
+    end_date: str | None = None
+    rollover: int = 0
+    created_at: str | None = None
+    updated_at: str | None = None
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "Budget":
         return cls(
             id=row["id"],
             category=row["category"],
-            month=row["month"],
             amount=row["amount"],
-            rollover=bool(row["rollover"]),
-            rollover_cap=row["rollover_cap"],
+            period=row["period"],
+            start_date=row["start_date"],
+            end_date=row["end_date"],
+            rollover=row["rollover"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )
 
 
 @dataclass
 class Goal:
-    id: int | None
-    name: str
-    target_amount: str
-    current_amount: str
-    target_date: str | None
-    linked_account: str | None
-    type: str
-    created_at: str | None
+    """A savings goal."""
+
+    id: int | None = None
+    name: str = ""
+    target_amount: str = "0"
+    current_amount: str = "0"
+    account: str | None = None
+    target_date: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "Goal":
@@ -43,25 +57,27 @@ class Goal:
             name=row["name"],
             target_amount=row["target_amount"],
             current_amount=row["current_amount"],
+            account=row["account"],
             target_date=row["target_date"],
-            linked_account=row["linked_account"],
-            type=row["type"],
             created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )
 
 
 @dataclass
 class RecurringTransaction:
-    id: int | None
-    description: str
-    amount: str
-    from_account: str
-    to_account: str
-    frequency: str  # "weekly", "monthly", "yearly"
-    next_due: str
-    end_date: str | None
-    auto_enter: bool
-    created_at: str | None
+    """A recurring transaction template."""
+
+    id: int | None = None
+    description: str = ""
+    amount: str = "0"
+    from_account: str = ""
+    to_account: str = ""
+    frequency: str = "monthly"  # "weekly", "monthly", "yearly"
+    next_due: str = ""
+    last_generated: str | None = None
+    active: int = 1
+    created_at: str | None = None
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "RecurringTransaction":
@@ -73,62 +89,103 @@ class RecurringTransaction:
             to_account=row["to_account"],
             frequency=row["frequency"],
             next_due=row["next_due"],
-            end_date=row["end_date"],
-            auto_enter=bool(row["auto_enter"]),
+            last_generated=row["last_generated"],
+            active=row["active"],
             created_at=row["created_at"],
         )
 
 
 @dataclass
-class CategorizationCache:
-    id: int | None
-    description: str
-    amount_bucket: str
-    account: str
-    confidence: float
-    source: str
-    created_at: str | None
+class CategorizationEntry:
+    """A cached AI categorization result."""
+
+    id: int | None = None
+    description_hash: str = ""
+    description: str = ""
+    amount_bucket: str | None = None
+    suggested_account: str = ""
+    confidence: float = 0.0
+    source: str = "ai"  # "ai", "user", "rule"
+    created_at: str | None = None
+    used_count: int = 1
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "CategorizationCache":
+    def from_row(cls, row: sqlite3.Row) -> "CategorizationEntry":
         return cls(
             id=row["id"],
+            description_hash=row["description_hash"],
             description=row["description"],
             amount_bucket=row["amount_bucket"],
-            account=row["account"],
+            suggested_account=row["suggested_account"],
             confidence=row["confidence"],
             source=row["source"],
             created_at=row["created_at"],
+            used_count=row["used_count"],
         )
 
 
 @dataclass
-class CategorizationCorrection:
-    id: int | None
-    description: str
-    original_account: str
-    corrected_account: str
-    created_at: str | None
+class ImportProfile:
+    """A bank-specific import profile."""
+
+    id: int | None = None
+    name: str = ""
+    bank_name: str | None = None
+    account: str = ""
+    rules_file: str | None = None
+    date_format: str | None = None
+    csv_delimiter: str = ","
+    skip_rows: int = 1
+    created_at: str | None = None
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "CategorizationCorrection":
+    def from_row(cls, row: sqlite3.Row) -> "ImportProfile":
         return cls(
             id=row["id"],
-            description=row["description"],
-            original_account=row["original_account"],
-            corrected_account=row["corrected_account"],
+            name=row["name"],
+            bank_name=row["bank_name"],
+            account=row["account"],
+            rules_file=row["rules_file"],
+            date_format=row["date_format"],
+            csv_delimiter=row["csv_delimiter"],
+            skip_rows=row["skip_rows"],
             created_at=row["created_at"],
+        )
+
+
+@dataclass
+class ImportHistory:
+    """A record of a CSV import event."""
+
+    id: int | None = None
+    profile_id: int | None = None
+    file_path: str = ""
+    imported_count: int = 0
+    duplicate_count: int = 0
+    imported_at: str | None = None
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "ImportHistory":
+        return cls(
+            id=row["id"],
+            profile_id=row["profile_id"],
+            file_path=row["file_path"],
+            imported_count=row["imported_count"],
+            duplicate_count=row["duplicate_count"],
+            imported_at=row["imported_at"],
         )
 
 
 @dataclass
 class Reconciliation:
-    id: int | None
-    account: str
-    statement_date: str
-    statement_balance: str
-    reconciled_at: str | None
-    status: str
+    """A reconciliation record for an account."""
+
+    id: int | None = None
+    account: str = ""
+    statement_date: str = ""
+    statement_balance: str = "0"
+    reconciled_at: str | None = None
+    status: str = "completed"
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "Reconciliation":
@@ -143,90 +200,12 @@ class Reconciliation:
 
 
 @dataclass
-class ImportProfile:
-    id: int | None
-    name: str
-    bank_name: str | None
-    rules_path: str
-    default_status: str
-    last_used: str | None
-    created_at: str | None
-
-    @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "ImportProfile":
-        return cls(
-            id=row["id"],
-            name=row["name"],
-            bank_name=row["bank_name"],
-            rules_path=row["rules_path"],
-            default_status=row["default_status"],
-            last_used=row["last_used"],
-            created_at=row["created_at"],
-        )
-
-
-@dataclass
-class ImportHistory:
-    id: int | None
-    csv_filename: str
-    profile_id: int | None
-    txn_count: int
-    duplicate_count: int
-    imported_at: str | None
-
-    @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "ImportHistory":
-        return cls(
-            id=row["id"],
-            csv_filename=row["csv_filename"],
-            profile_id=row["profile_id"],
-            txn_count=row["txn_count"],
-            duplicate_count=row["duplicate_count"],
-            imported_at=row["imported_at"],
-        )
-
-
-@dataclass
-class InsightsCache:
-    id: int | None
-    period: str
-    content: str
-    model: str
-    generated_at: str | None
-
-    @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "InsightsCache":
-        return cls(
-            id=row["id"],
-            period=row["period"],
-            content=row["content"],
-            model=row["model"],
-            generated_at=row["generated_at"],
-        )
-
-
-@dataclass
-class ImportHash:
-    id: int | None
-    hash: str
-    import_history_id: int | None
-    created_at: str | None
-
-    @classmethod
-    def from_row(cls, row: sqlite3.Row) -> "ImportHash":
-        return cls(
-            id=row["id"],
-            hash=row["hash"],
-            import_history_id=row["import_history_id"],
-            created_at=row["created_at"],
-        )
-
-
-@dataclass
 class AppSetting:
-    key: str
-    value: str
-    updated_at: str | None
+    """A key-value app setting."""
+
+    key: str = ""
+    value: str = ""
+    updated_at: str | None = None
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "AppSetting":
@@ -235,3 +214,12 @@ class AppSetting:
             value=row["value"],
             updated_at=row["updated_at"],
         )
+
+
+@dataclass
+class InsightsCacheEntry:
+    """A cached AI insights result."""
+
+    content: str = ""
+    generated_at: str | None = None
+    period: str | None = None

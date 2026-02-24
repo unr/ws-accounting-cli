@@ -5,48 +5,27 @@ import sys
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        prog="ws-accounting",
-        description="Personal finance TUI built with Textual + hledger",
-    )
+    """Run the ws-accounting TUI application."""
+    parser = argparse.ArgumentParser(prog="ws-accounting")
     parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {_get_version()}",
-    )
-    parser.add_argument(
-        "--web",
+        "--fresh",
         action="store_true",
-        help="Launch in web mode via textual serve",
+        help="Reset config and database, then re-run onboarding",
     )
     args = parser.parse_args()
 
-    if args.web:
-        _run_web()
-    else:
-        _run_tui()
+    if args.fresh:
+        from ws_accounting.config.paths import get_config_file, get_db_path
 
+        for path in (get_config_file(), get_db_path()):
+            if path.exists():
+                path.unlink()
+                print(f"Removed {path}")
 
-def _get_version() -> str:
-    from ws_accounting import __version__
+    from ws_accounting.app import WsAccountingApp
 
-    return __version__
-
-
-def _run_tui() -> None:
-    from ws_accounting.app import WSAccountingApp
-
-    app = WSAccountingApp()
+    app = WsAccountingApp()
     app.run()
-
-
-def _run_web() -> None:
-    import subprocess
-
-    subprocess.run(
-        [sys.executable, "-m", "textual", "serve", "ws_accounting.app:WSAccountingApp"],
-        check=True,
-    )
 
 
 if __name__ == "__main__":

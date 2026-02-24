@@ -1,45 +1,60 @@
-; ws-accounting default chart of accounts
-; Commodity directive — sets display format for all amounts
+; Default chart of accounts for ws-accounting
+; Commodity directive
 commodity $1,000.00
 
-; === Assets ===
-account assets:bank:checking          ; type: Cash
-account assets:bank:savings           ; type: Cash
-account assets:cash                   ; type: Cash
-account assets:investments            ; type: Asset
+; Asset accounts
+account assets
+account assets:checking
+account assets:savings
+account assets:cash
 
-; === Liabilities ===
-account liabilities:credit card       ; type: Liability
-account liabilities:loans             ; type: Liability
+; Liability accounts
+account liabilities
+account liabilities:credit card
 
-; === Income ===
-account income:salary                 ; type: Revenue
-account income:freelance              ; type: Revenue
-account income:interest               ; type: Revenue
-account income:refunds                ; type: Revenue
+; Income accounts
+account income
+account income:salary
+account income:freelance
+account income:interest
+account income:other
 
-; === Expenses ===
-account expenses:food:groceries       ; type: Expense
-account expenses:food:dining          ; type: Expense
-account expenses:housing:rent         ; type: Expense
-account expenses:housing:utilities    ; type: Expense
-account expenses:transportation:gas   ; type: Expense
-account expenses:transportation:transit ; type: Expense
-account expenses:health:medical       ; type: Expense
-account expenses:health:insurance     ; type: Expense
-account expenses:entertainment        ; type: Expense
-account expenses:shopping:clothing    ; type: Expense
-account expenses:shopping:general     ; type: Expense
-account expenses:subscriptions        ; type: Expense
-account expenses:education            ; type: Expense
-account expenses:personal care        ; type: Expense
-account expenses:gifts                ; type: Expense
-account expenses:travel               ; type: Expense
-account expenses:taxes:federal        ; type: Expense
-account expenses:taxes:state          ; type: Expense
-account expenses:charitable:donations ; type: Expense
-account expenses:fees:bank            ; type: Expense
-account expenses:miscellaneous        ; type: Expense
+; Expense accounts
+account expenses
+account expenses:food
+account expenses:food:groceries
+account expenses:food:dining
+account expenses:food:coffee
+account expenses:housing
+account expenses:housing:rent
+account expenses:housing:utilities
+account expenses:housing:internet
+account expenses:transport
+account expenses:transport:gas
+account expenses:transport:parking
+account expenses:transport:public transit
+account expenses:health
+account expenses:health:insurance
+account expenses:health:medical
+account expenses:health:pharmacy
+account expenses:entertainment
+account expenses:entertainment:subscriptions
+account expenses:entertainment:movies
+account expenses:entertainment:games
+account expenses:shopping
+account expenses:shopping:clothing
+account expenses:shopping:electronics
+account expenses:shopping:household
+account expenses:personal
+account expenses:personal:haircut
+account expenses:personal:gym
+account expenses:education
+account expenses:insurance
+account expenses:taxes
+account expenses:gifts
+account expenses:charity
+account expenses:other
 
-; === Equity ===
-account equity:opening balances       ; type: Equity
+; Equity accounts
+account equity
+account equity:opening balances

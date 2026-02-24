@@ -1,33 +1,46 @@
 [project]
 name = "ws-accounting-cli"
 version = "0.1.0"
-description = "Personal finance TUI built with Textual + hledger"
+description = "TUI personal finance manager built with Textual + hledger"
 readme = "README.md"
 authors = [
     { name = "Paul Morrison", email = "paul.unr@gmail.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
-    "textual>=1.0.0",
-    "textual-plotext>=0.2.0",
-    "anthropic>=0.40.0",
-    "pydantic>=2.0",
-    "platformdirs>=4.0",
+    "textual>=8.0.0",
+    "textual-plotext>=1.0.1",
+    "anthropic>=0.83.0",
+    "pydantic>=2.12.0",
+    "platformdirs>=4.9.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "textual-dev>=1.0", "syrupy>=4.0", "ruff>=0.8"]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-asyncio>=0.25",
+    "textual-dev>=1.7",
+    "syrupy>=4.8",
+    "ruff>=0.15.0",
+]
 
 [project.scripts]
 ws-accounting = "ws_accounting.__main__:main"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/ws_accounting"]
-
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "hledger: tests that require hledger binary",
+]
+
+[tool.uv.build-backend]
+module-name = "ws_accounting"
+
+[build-system]
+requires = ["uv_build>=0.9.7,<0.10.0"]
+build-backend = "uv_build"

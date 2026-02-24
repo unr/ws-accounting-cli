@@ -1,50 +1,42 @@
-/* Dashboard screen styles. */
-
-DashboardScreen {
-    layout: vertical;
-}
+/* Dashboard screen styles */
 
 #summary-cards {
-    height: auto;
-    min-height: 7;
-    padding: 1 0;
-    layout: horizontal;
+    height: 7;
+    margin: 0 1;
 }
 
 #summary-cards SummaryCard {
     width: 1fr;
+    margin: 0 1;
 }
 
 #dashboard-body {
     height: 1fr;
-    layout: horizontal;
-    padding: 0 1;
+    margin: 1 0;
 }
 
 #budget-section {
     width: 1fr;
-    height: 1fr;
-    padding: 0 1 0 0;
-}
-
-#budget-bars {
-    height: 1fr;
-    border: round $panel;
-    padding: 1;
-    overflow-y: auto;
+    margin: 0 1;
+    border: round $primary-muted;
+    padding: 1 2;
 }
 
 #recent-section {
     width: 1fr;
-    height: 1fr;
-    padding: 0 0 0 1;
+    margin: 0 1;
+    border: round $primary-muted;
+    padding: 1 2;
+}
+
+#budget-bars {
+    height: auto;
+    max-height: 100%;
 }
 
 #recent-txns {
-    height: 1fr;
-    border: round $panel;
-    padding: 1;
-    overflow-y: auto;
+    height: auto;
+    max-height: 100%;
 }
 
 .txn-row {
@@ -53,41 +45,24 @@ DashboardScreen {
 
 .muted-text {
     color: $text-muted;
-}
-
-#quick-actions {
-    dock: bottom;
-    height: auto;
-    min-height: 3;
-    padding: 1 1;
+    text-style: italic;
 }
 
 #empty-state {
     display: none;
+    align: center middle;
     width: 100%;
     height: 1fr;
-    align: center middle;
 }
 
 #empty-msg {
-    width: auto;
-    height: auto;
-    padding: 2 4;
-    border: round $primary;
     text-align: center;
+    color: $text-muted;
+    padding: 4 8;
+    border: round $primary-muted;
 }
 
-BudgetBar {
-    height: 2;
-    margin-bottom: 1;
-}
-
-BudgetBar .budget-label {
-    width: 16;
-    text-style: bold;
-}
-
-BudgetBar .budget-amount {
-    width: 14;
-    text-align: right;
+#quick-actions {
+    height: auto;
+    margin: 1;
 }

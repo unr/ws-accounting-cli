@@ -68,3 +68,6 @@ class AmountDisplay(Static):
         if commodity is not None:
             self._commodity = commodity
         self._update_display()
+
+    # Alias for API compatibility
+    update_amount = set_amount

@@ -1,79 +1,53 @@
-"""Summary card widget for dashboard stat display."""
+"""Summary card widget for dashboard."""
 
 from decimal import Decimal
 
-from textual.app import ComposeResult
-from textual.widget import Widget
-from textual.widgets import Label, Sparkline
+from textual.widgets import Static
 
 from ws_accounting.widgets.amount_display import AmountDisplay
 
 
-class SummaryCard(Widget):
-    """A card showing a title, large amount, and optional sparkline."""
+class SummaryCard(Static):
+    """Dashboard summary card showing a title and amount."""
 
     DEFAULT_CSS = """
     SummaryCard {
         height: auto;
-        min-height: 5;
-        border: round $primary;
-        padding: 1 2;
-        margin: 0 1;
+        min-height: 3;
+        padding: 0 1;
+        border: solid $panel;
     }
     SummaryCard .card-title {
-        text-style: bold;
         color: $text-muted;
-        margin-bottom: 0;
-    }
-    SummaryCard AmountDisplay {
         text-style: bold;
-        width: 100%;
-    }
-    SummaryCard Sparkline {
-        height: 1;
-        margin-top: 1;
     }
     """
 
-    def __init__(
-        self,
-        title: str,
-        amount: Decimal | None = None,
-        commodity: str = "$",
-        show_sign: bool = True,
-        sparkline_data: list[float] | None = None,
-        **kwargs,
-    ) -> None:
-        self._card_title = title
-        self._amount = amount or Decimal("0")
-        self._commodity = commodity
-        self._show_sign = show_sign
-        self._sparkline_data = sparkline_data
+    def __init__(self, title: str = "", show_sign: bool = True, **kwargs) -> None:
         super().__init__(**kwargs)
+        self._title = title
+        self._value = Decimal(0)
+        self._show_sign = show_sign
 
-    def compose(self) -> ComposeResult:
-        yield Label(self._card_title, classes="card-title")
-        yield AmountDisplay(
-            amount=self._amount,
-            commodity=self._commodity,
-            show_sign=self._show_sign,
-            id="card-amount",
-        )
-        if self._sparkline_data:
-            yield Sparkline(
-                self._sparkline_data,
-                id="card-sparkline",
-            )
+    def compose(self):
+        yield Static(self._title, classes="card-title")
+        yield AmountDisplay(self._value, show_sign=self._show_sign)
 
-    def update_amount(
-        self,
-        amount: Decimal,
-        commodity: str | None = None,
-    ) -> None:
-        """Update the displayed amount."""
-        self._amount = amount
+    def update_value(self, value: Decimal, commodity: str | None = None) -> None:
+        self._value = value
         try:
-            display = self.query_one("#card-amount", AmountDisplay)
-            display.set_amount(amount, commodity)
+            amount_display = self.query_one(AmountDisplay)
+            amount_display.set_amount(value, commodity)
+        except Exception:
+            pass
+
+    def update_amount(self, value: Decimal, commodity: str | None = None) -> None:
+        """Alias for update_value, matching the dashboard API."""
+        self.update_value(value, commodity)
+
+    def show_error(self, message: str) -> None:
+        try:
+            amount_display = self.query_one(AmountDisplay)
+            amount_display.update(message)
         except Exception:
             pass

@@ -1,123 +1,84 @@
-/* Budgets screen styles. */
-
-BudgetsScreen {
-    layout: vertical;
-}
-
-/* ── Header ───────────────────────────────────────── */
+/* Budgets screen styles */
 
 #budgets-header {
-    height: 3;
+    height: auto;
     padding: 0 1;
-    dock: top;
-    background: $surface;
-    align: left middle;
+    margin-bottom: 1;
 }
 
 #budgets-title {
     text-style: bold;
     width: auto;
-    padding: 0 2 0 0;
+    margin-right: 2;
 }
 
 .month-nav {
-    width: 5;
-    min-width: 5;
+    width: 3;
+    min-width: 3;
 }
 
 #month-label {
     width: auto;
-    min-width: 20;
-    text-align: center;
     text-style: bold;
-    padding: 1 1 0 1;
+    padding: 0 1;
 }
 
 #btn-add-budget {
+    width: auto;
     margin-left: 2;
 }
 
-/* ── Summary stats ────────────────────────────────── */
-
 #budget-summary {
-    height: 3;
-    padding: 0 2;
-    background: $surface;
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 1;
 }
 
-.summary-stat {
+#budget-summary Static {
     width: 1fr;
     text-align: center;
-    text-style: bold;
-    padding: 1 0;
+    padding: 1 2;
+    border: round $primary-muted;
+    margin: 0 1;
 }
-
-/* ── Budget list ──────────────────────────────────── */
 
 #budgets-list {
     height: 1fr;
-    padding: 0 1;
+    margin: 0 1;
 }
 
 #budgets-empty {
-    width: 1fr;
-    height: auto;
-    content-align: center middle;
     text-align: center;
     color: $text-muted;
-    padding: 2 0;
+    padding: 4 0;
 }
-
-/* ── Lower section: goals + recurring ─────────────── */
 
 #budgets-lower {
     height: auto;
-    min-height: 8;
-    max-height: 14;
-    padding: 0 1;
+    max-height: 40%;
+    margin: 1 0;
 }
 
 #goals-section {
     width: 1fr;
-    height: 1fr;
-    padding: 0 1 0 0;
+    border: round $primary-muted;
+    padding: 1 2;
+    margin: 0 1;
 }
 
 #recurring-section {
     width: 1fr;
-    height: 1fr;
-    padding: 0 0 0 1;
+    border: round $primary-muted;
+    padding: 1 2;
+    margin: 0 1;
 }
 
 #goals-list {
-    height: 1fr;
-    border: round $panel;
-    padding: 1;
+    height: auto;
+    max-height: 10;
 }
 
 #recurring-list {
-    height: 1fr;
-    border: round $panel;
-    padding: 1;
-}
-
-.section-title {
-    text-style: bold;
-    margin-bottom: 1;
-    padding: 0 1;
-}
-
-.goal-row {
-    height: 1;
-    padding: 0 1;
-}
-
-.recurring-row {
-    height: 1;
-    padding: 0 1;
-}
-
-.muted-text {
-    color: $text-muted;
-    padding: 0 1;
+    height: auto;
+    max-height: 10;
 }

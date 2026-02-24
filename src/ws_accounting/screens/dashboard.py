@@ -9,7 +9,7 @@ from decimal import Decimal
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Label, Static
+from textual.widgets import Footer, Label, Static
 from textual.worker import Worker, WorkerState
 
 from ws_accounting.core.hledger import (
@@ -22,6 +22,7 @@ from ws_accounting.core.parser import (
     parse_balance_report,
     parse_register,
 )
+from ws_accounting.widgets.nav_header import NavHeader
 from ws_accounting.widgets.quick_actions import QuickActions
 from ws_accounting.widgets.summary_card import SummaryCard
 
@@ -35,12 +36,14 @@ class DashboardScreen(Screen):
 
     BINDINGS = []
 
-    def __init__(self, gateway: HLedgerGateway | None = None, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._gateway = gateway
+        self._gateway: HLedgerGateway | None = None
         self._has_data = False
 
     def compose(self) -> ComposeResult:
+        yield NavHeader()
+
         # Summary cards row
         with Horizontal(id="summary-cards"):
             yield SummaryCard(
@@ -94,8 +97,14 @@ class DashboardScreen(Screen):
             id="empty-state",
         )
 
+        yield Footer()
+
     def on_mount(self) -> None:
         """Kick off data loading when the screen is mounted."""
+        self.query_one(NavHeader).set_active("dashboard")
+        # Grab the gateway from the app
+        if self._gateway is None and hasattr(self.app, "gateway"):
+            self._gateway = self.app.gateway
         if self._gateway is not None:
             self._load_data()
 
@@ -342,7 +351,7 @@ class DashboardScreen(Screen):
         self, event: QuickActions.ImportCSV
     ) -> None:
         """Handle import CSV quick action."""
-        self.app.action_switch_screen("csv_import")
+        self.app.switch_mode("csv_import")
 
     def on_quick_actions_new_transaction(
         self, event: QuickActions.NewTransaction
@@ -354,7 +363,7 @@ class DashboardScreen(Screen):
         self, event: QuickActions.ViewAccounts
     ) -> None:
         """Handle view accounts quick action."""
-        self.app.action_switch_screen("accounts")
+        self.app.switch_mode("accounts")
 
 
 class BudgetBar(Static):

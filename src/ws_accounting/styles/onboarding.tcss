@@ -1,156 +1,97 @@
-/* Onboarding wizard styles. */
+/* Onboarding screen styles */
 
 OnboardingScreen {
-    layout: vertical;
+    align: center middle;
+    background: $background 80%;
 }
 
-/* ── Outer container ───────────────────────────────── */
-
-#onboarding-outer {
-    width: 1fr;
-    height: 1fr;
-    padding: 1 2;
+#onboarding-container {
+    width: 72;
+    max-width: 90%;
+    max-height: 85%;
+    background: $surface;
+    border: round $primary;
+    padding: 2 3;
 }
 
 #onboarding-title {
     text-style: bold;
     text-align: center;
-    width: 1fr;
-    padding: 1 0;
-    color: $text;
+    color: $primary;
+    width: 100%;
+    margin-bottom: 1;
 }
 
 #step-indicator {
     text-align: center;
-    width: 1fr;
     color: $text-muted;
     margin-bottom: 1;
 }
 
-/* ── Content Switcher ──────────────────────────────── */
-
 #onboarding-switcher {
-    height: 1fr;
-    width: 1fr;
-}
-
-/* ── Step containers ───────────────────────────────── */
-
-#step-hledger,
-#step-journal,
-#step-currency,
-#step-api-key,
-#step-sample-data {
-    padding: 1 4;
-    height: 1fr;
-    max-width: 90;
-    margin: 0;
+    height: auto;
+    min-height: 16;
 }
 
 .step-title {
     text-style: bold;
-    margin-bottom: 1;
     color: $text;
+    margin-bottom: 1;
 }
 
 .step-description {
     color: $text-muted;
     margin-bottom: 1;
+    width: 100%;
 }
-
-.step-buttons {
-    height: auto;
-    dock: bottom;
-    padding: 1 0;
-    align: right middle;
-}
-
-.step-buttons Button {
-    margin-left: 1;
-}
-
-/* ── Step 1: hledger check ─────────────────────────── */
-
-.status-box {
-    border: round $panel;
-    padding: 1 2;
-    margin: 1 0;
-    text-align: center;
-}
-
-.status-ok {
-    border: round $success;
-    color: $success;
-}
-
-.status-error {
-    border: round $error;
-    color: $error;
-}
-
-.install-guide {
-    margin: 1 0;
-    padding: 1 2;
-    color: $text-muted;
-}
-
-/* ── Step 2: Journal setup ─────────────────────────── */
-
-#journal-choice-row {
-    height: auto;
-    margin: 1 0;
-    align: center middle;
-}
-
-.choice-btn {
-    margin: 0 1;
-}
-
-.info-text {
-    color: $text-muted;
-    margin: 1 0;
-    padding: 1 2;
-    border: round $panel;
-}
-
-.hidden-field {
-    display: none;
-}
-
-.error-text {
-    color: $error;
-    margin-top: 1;
-}
-
-#journal-path-input {
-    width: 1fr;
-    margin: 1 0;
-}
-
-/* ── Step 3: Currency ──────────────────────────────── */
 
 .field-label {
     margin-top: 1;
     margin-bottom: 0;
-    color: $text;
+    text-style: bold;
 }
 
-#currency-input {
-    width: 20;
-    margin: 1 0;
+#onboarding-container Input {
+    margin-bottom: 1;
 }
 
-/* ── Step 4: API Key ───────────────────────────────── */
-
-#api-key-input {
-    width: 1fr;
-    margin: 1 0;
+#onboarding-container Select {
+    margin-bottom: 1;
 }
 
-/* ── Step 5: Sample data ───────────────────────────── */
-
-#sample-checkbox-row {
+.step-buttons {
     height: auto;
+    margin-top: 2;
+}
+
+.step-buttons Button {
+    margin-right: 1;
+}
+
+.status-box {
+    padding: 1 2;
     margin: 1 0;
-    padding: 1 0;
+    border: round $primary-muted;
+}
+
+.status-ok {
+    color: $success;
+    border: round $success;
+}
+
+.status-error {
+    color: $error;
+    border: round $error;
+}
+
+.install-guide {
+    color: $text-muted;
+    padding: 1 2;
+    margin-bottom: 1;
+}
+
+.info-text {
+    color: $text-muted;
+    padding: 0 1;
+    margin: 1 0;
 }

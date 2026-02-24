@@ -1,10 +1,13 @@
-; Generic bank CSV rules
-; Adjust fields to match your bank's CSV format
+; Generic CSV import rules
+; Assumes columns: Date, Description, Amount
 
 skip 1
 
 fields date, description, amount
 
 date-format %Y-%m-%d
+
 currency $
-account1 assets:bank:checking
+
+account1 expenses:other
+account2 assets:checking

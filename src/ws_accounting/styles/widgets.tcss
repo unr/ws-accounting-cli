@@ -1,69 +1,88 @@
-/* Shared widget styles. */
+/* Shared widget styles */
 
-.widget-label {
-    text-style: bold;
-    margin-bottom: 1;
+/* NavHeader */
+NavHeader {
+    height: 3;
+    dock: top;
 }
 
-/* ── PeriodSelector ──────────────────────────────────── */
+/* SummaryCard */
+SummaryCard {
+    height: 5;
+    border: round $primary-muted;
+    padding: 0 2;
+}
 
+SummaryCard .card-title {
+    text-style: bold;
+    color: $text-muted;
+}
+
+SummaryCard .card-amount {
+    text-style: bold;
+}
+
+/* PeriodSelector */
 PeriodSelector {
-    height: auto;
+    height: 3;
     width: auto;
 }
 
-PeriodSelector #period-select {
-    width: 20;
+PeriodSelector Button {
+    width: 3;
+    min-width: 3;
 }
 
-PeriodSelector .date-input {
-    width: 14;
-    margin-left: 1;
-}
-
-PeriodSelector .date-separator {
-    width: 4;
-    content-align: center middle;
+PeriodSelector Static {
+    width: auto;
     padding: 0 1;
+    text-style: bold;
 }
 
-PeriodSelector .custom-range {
-    display: none;
-}
-
-PeriodSelector .custom-range.visible {
-    display: block;
-}
-
-/* ── CategoryPicker ──────────────────────────────────── */
-
-CategoryPicker {
+/* QuickActions */
+QuickActions {
     height: auto;
-    width: 1fr;
+    padding: 1 0;
 }
 
-CategoryPicker #category-input {
-    width: 1fr;
+QuickActions Button {
+    margin-right: 1;
 }
 
-CategoryPicker #category-options {
-    max-height: 10;
-    display: none;
-    border: round $primary;
-    width: 1fr;
+/* BudgetBar */
+BudgetBar {
+    height: auto;
+    margin-bottom: 1;
 }
 
-CategoryPicker #category-options.visible {
-    display: block;
+/* ImportStepper */
+ImportStepper {
+    height: 3;
 }
 
-/* ── TransactionTable ────────────────────────────────── */
+/* ConfidenceBadge */
+ConfidenceBadge {
+    width: auto;
+    height: 1;
+}
 
+/* AmountDisplay */
+AmountDisplay {
+    width: auto;
+    height: 1;
+}
+
+/* TransactionTable */
 TransactionTable {
     height: 1fr;
 }
 
-TransactionTable > .datatable--header {
-    text-style: bold;
-    background: $surface;
+/* AccountTree */
+AccountTree {
+    height: 1fr;
+}
+
+/* CategoryPicker */
+CategoryPicker {
+    height: auto;
 }

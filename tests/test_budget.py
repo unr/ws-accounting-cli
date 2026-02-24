@@ -1,348 +1,489 @@
-"""Tests for core/budget.py -- budget math, rollover, and journal formatting."""
+"""Tests for budget math, DB CRUD, and recurring queries."""
+
+from __future__ import annotations
 
 from decimal import Decimal
 
 import pytest
 
 from ws_accounting.core.budget import (
+    BudgetResult,
     BudgetStatus,
     calculate_budget_status,
     calculate_rollover,
-    format_budget_journal,
+)
+from ws_accounting.db.database import Database
+from ws_accounting.db.models import Budget, Goal, RecurringTransaction
+from ws_accounting.db.queries import (
+    delete_budget,
+    get_budgets,
+    get_due_recurring,
+    get_goals,
+    get_recurring,
+    upsert_budget,
+    upsert_goal,
+    upsert_recurring,
 )
 
 
 # ---------------------------------------------------------------------------
-# calculate_budget_status
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def db(tmp_path):
+    """Create a Database with all tables migrated."""
+    db_path = tmp_path / "test.db"
+    database = Database(db_path)
+    database.migrate()
+    return database
+
+
+# ---------------------------------------------------------------------------
+# calculate_budget_status tests
 # ---------------------------------------------------------------------------
 
 
 class TestCalculateBudgetStatus:
-    def test_normal_spending(self) -> None:
-        """Under-budget produces correct remaining and percentage."""
-        status = calculate_budget_status(
-            category="expenses:food:groceries",
-            budgeted=Decimal("600.00"),
-            spent=Decimal("450.00"),
-        )
-        assert status.category == "expenses:food:groceries"
-        assert status.budgeted == Decimal("600.00")
-        assert status.spent == Decimal("450.00")
-        assert status.remaining == Decimal("150.00")
-        assert status.percentage == pytest.approx(0.75, rel=1e-6)
-        assert status.rollover_amount == Decimal("0")
-        assert status.is_over is False
+    """Test budget status computation."""
 
-    def test_over_budget(self) -> None:
-        """Spending more than budgeted sets is_over=True."""
-        status = calculate_budget_status(
+    def test_under_budget(self):
+        result = calculate_budget_status(
+            category="expenses:food",
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("200"),
+        )
+        assert isinstance(result, BudgetResult)
+        assert result.status == BudgetStatus.UNDER
+        assert result.percentage == 40
+        assert result.remaining == Decimal("300")
+        assert result.category == "expenses:food"
+        assert result.budget_amount == Decimal("500")
+        assert result.spent_amount == Decimal("200")
+
+    def test_near_budget_at_80_percent(self):
+        result = calculate_budget_status(
             category="expenses:dining",
-            budgeted=Decimal("300.00"),
-            spent=Decimal("350.00"),
+            budget_amount=Decimal("100"),
+            spent_amount=Decimal("80"),
         )
-        assert status.remaining == Decimal("-50.00")
-        assert status.is_over is True
-        assert status.percentage > 1.0
+        assert result.status == BudgetStatus.NEAR
+        assert result.percentage == 80
 
-    def test_at_limit_exactly(self) -> None:
-        """Spending exactly the budget: remaining=0, not over."""
-        status = calculate_budget_status(
+    def test_near_budget_at_99_percent(self):
+        result = calculate_budget_status(
+            category="expenses:dining",
+            budget_amount=Decimal("100"),
+            spent_amount=Decimal("99"),
+        )
+        assert result.status == BudgetStatus.NEAR
+        assert result.percentage == 99
+
+    def test_over_budget(self):
+        result = calculate_budget_status(
+            category="expenses:shopping",
+            budget_amount=Decimal("300"),
+            spent_amount=Decimal("350"),
+        )
+        assert result.status == BudgetStatus.OVER
+        assert result.percentage == 100  # clamped to 100
+        assert result.remaining == Decimal("-50")
+
+    def test_exactly_at_budget(self):
+        result = calculate_budget_status(
             category="expenses:transport",
-            budgeted=Decimal("250.00"),
-            spent=Decimal("250.00"),
+            budget_amount=Decimal("200"),
+            spent_amount=Decimal("200"),
         )
-        assert status.remaining == Decimal("0.00")
-        assert status.percentage == pytest.approx(1.0, rel=1e-6)
-        assert status.is_over is False
+        assert result.status == BudgetStatus.OVER
+        assert result.percentage == 100
+        assert result.remaining == Decimal("0")
 
-    def test_zero_budget_zero_spent(self) -> None:
-        """Zero budget and zero spending produces 0% and not over."""
-        status = calculate_budget_status(
+    def test_zero_budget(self):
+        result = calculate_budget_status(
             category="expenses:misc",
-            budgeted=Decimal("0"),
-            spent=Decimal("0"),
+            budget_amount=Decimal("0"),
+            spent_amount=Decimal("50"),
         )
-        assert status.percentage == 0.0
-        assert status.remaining == Decimal("0")
-        assert status.is_over is False
+        assert result.status == BudgetStatus.UNDER
+        assert result.percentage == 0
 
-    def test_zero_budget_with_spending(self) -> None:
-        """Zero budget but spending: 0% (avoids div-by-zero), is_over."""
-        status = calculate_budget_status(
-            category="expenses:misc",
-            budgeted=Decimal("0"),
-            spent=Decimal("50.00"),
-        )
-        assert status.percentage == 0.0
-        assert status.remaining == Decimal("-50.00")
-        assert status.is_over is True
-
-    def test_with_rollover(self) -> None:
-        """Rollover adds to effective budget."""
-        status = calculate_budget_status(
+    def test_no_spending(self):
+        result = calculate_budget_status(
             category="expenses:food",
-            budgeted=Decimal("600.00"),
-            spent=Decimal("700.00"),
-            rollover=Decimal("150.00"),
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("0"),
         )
-        # Effective budget = 600 + 150 = 750
-        assert status.budgeted == Decimal("750.00")
-        assert status.remaining == Decimal("50.00")
-        assert status.is_over is False
-        assert status.rollover_amount == Decimal("150.00")
+        assert result.status == BudgetStatus.UNDER
+        assert result.percentage == 0
+        assert result.remaining == Decimal("500")
 
-    def test_with_rollover_cap(self) -> None:
-        """Rollover is capped when cap is specified."""
-        status = calculate_budget_status(
+    def test_with_rollover(self):
+        """Rollover increases effective budget."""
+        result = calculate_budget_status(
             category="expenses:food",
-            budgeted=Decimal("600.00"),
-            spent=Decimal("500.00"),
-            rollover=Decimal("300.00"),
-            rollover_cap=Decimal("100.00"),
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("400"),
+            rollover=Decimal("100"),
         )
-        # Effective rollover capped at 100, budget = 600 + 100 = 700
-        assert status.budgeted == Decimal("700.00")
-        assert status.rollover_amount == Decimal("100.00")
-        assert status.remaining == Decimal("200.00")
+        # Effective budget = 500 + 100 = 600
+        # Percentage = 400/600 = 66%
+        assert result.status == BudgetStatus.UNDER
+        assert result.percentage == 66
+        assert result.remaining == Decimal("200")
+        assert result.rollover == Decimal("100")
 
-    def test_rollover_below_cap_unchanged(self) -> None:
-        """Rollover below cap is not modified."""
-        status = calculate_budget_status(
+    def test_rollover_prevents_over(self):
+        """Rollover can prevent going over budget."""
+        result = calculate_budget_status(
             category="expenses:food",
-            budgeted=Decimal("600.00"),
-            spent=Decimal("500.00"),
-            rollover=Decimal("50.00"),
-            rollover_cap=Decimal("200.00"),
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("550"),
+            rollover=Decimal("100"),
         )
-        assert status.rollover_amount == Decimal("50.00")
-        assert status.budgeted == Decimal("650.00")
-
-    def test_rollover_cap_none_means_no_cap(self) -> None:
-        """rollover_cap=None means full rollover passes through."""
-        status = calculate_budget_status(
-            category="expenses:food",
-            budgeted=Decimal("600.00"),
-            spent=Decimal("0"),
-            rollover=Decimal("999.99"),
-            rollover_cap=None,
-        )
-        assert status.rollover_amount == Decimal("999.99")
-        assert status.budgeted == Decimal("1599.99")
+        # Effective budget = 600, spent = 550
+        # Percentage = 550/600 = 91%
+        assert result.status == BudgetStatus.NEAR
+        assert result.remaining == Decimal("50")
 
 
 # ---------------------------------------------------------------------------
-# calculate_rollover
+# calculate_rollover tests
 # ---------------------------------------------------------------------------
 
 
 class TestCalculateRollover:
-    def test_underspend_rolls_over(self) -> None:
-        """Unspent budget rolls forward."""
-        result = calculate_rollover(
-            budgeted=Decimal("600.00"),
-            spent=Decimal("450.00"),
-        )
-        assert result == Decimal("150.00")
+    """Test rollover computation."""
 
-    def test_overspend_returns_zero(self) -> None:
-        """Overspending produces zero rollover (no deficit carry)."""
+    def test_basic_rollover(self):
+        """Unspent amount rolls over."""
         result = calculate_rollover(
-            budgeted=Decimal("300.00"),
-            spent=Decimal("350.00"),
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("300"),
+        )
+        assert result == Decimal("200")
+
+    def test_no_rollover_when_overspent(self):
+        """No rollover when spent exceeds budget."""
+        result = calculate_rollover(
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("600"),
         )
         assert result == Decimal("0")
 
-    def test_exact_spend_returns_zero(self) -> None:
-        """Spending exactly the budget produces zero rollover."""
+    def test_zero_spent(self):
+        """Full budget rolls over when nothing spent."""
         result = calculate_rollover(
-            budgeted=Decimal("500.00"),
-            spent=Decimal("500.00"),
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("0"),
+        )
+        assert result == Decimal("500")
+
+    def test_exactly_spent(self):
+        """Zero rollover when exactly spent."""
+        result = calculate_rollover(
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("500"),
         )
         assert result == Decimal("0")
 
-    def test_with_cap(self) -> None:
-        """Rollover is limited to the cap."""
+    def test_with_previous_rollover(self):
+        """Previous rollover adds to effective budget."""
         result = calculate_rollover(
-            budgeted=Decimal("600.00"),
-            spent=Decimal("200.00"),
-            cap=Decimal("100.00"),
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("400"),
+            previous_rollover=Decimal("100"),
         )
-        # Underspend = 400, but cap = 100
-        assert result == Decimal("100.00")
+        # Effective = 500 + 100 = 600; rollover = 600 - 400 = 200
+        assert result == Decimal("200")
 
-    def test_cap_above_rollover_no_effect(self) -> None:
-        """Cap above actual rollover does not change the value."""
+    def test_previous_rollover_consumed(self):
+        """Spending can consume previous rollover."""
         result = calculate_rollover(
-            budgeted=Decimal("600.00"),
-            spent=Decimal("550.00"),
-            cap=Decimal("200.00"),
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("550"),
+            previous_rollover=Decimal("100"),
         )
-        assert result == Decimal("50.00")
+        # Effective = 600; rollover = 600 - 550 = 50
+        assert result == Decimal("50")
 
-    def test_cap_none_means_no_limit(self) -> None:
-        """cap=None means no limit on rollover."""
+    def test_previous_rollover_fully_consumed(self):
+        """No rollover when all including previous is consumed."""
         result = calculate_rollover(
-            budgeted=Decimal("1000.00"),
-            spent=Decimal("0"),
-            cap=None,
-        )
-        assert result == Decimal("1000.00")
-
-    def test_zero_budget_zero_spent(self) -> None:
-        """Both zero: rollover is zero."""
-        result = calculate_rollover(
-            budgeted=Decimal("0"),
-            spent=Decimal("0"),
+            budget_amount=Decimal("500"),
+            spent_amount=Decimal("700"),
+            previous_rollover=Decimal("100"),
         )
         assert result == Decimal("0")
 
 
 # ---------------------------------------------------------------------------
-# format_budget_journal
+# Database CRUD: budgets
 # ---------------------------------------------------------------------------
 
 
-class TestFormatBudgetJournal:
-    def test_single_category(self) -> None:
-        """Single category produces a valid periodic transaction."""
-        result = format_budget_journal([
-            {"category": "expenses:food:groceries", "amount": Decimal("600.00")}
-        ])
-        assert result.startswith("~ monthly\n")
-        assert "expenses:food:groceries" in result
-        assert "$600.00" in result
-        assert result.endswith("\n")
+class TestBudgetCRUD:
+    """Test budget DB operations using Database objects."""
 
-    def test_multiple_categories(self) -> None:
-        """Multiple categories each get their own line."""
-        budgets = [
-            {"category": "expenses:food:groceries", "amount": Decimal("600.00")},
-            {"category": "expenses:dining", "amount": Decimal("300.00")},
-            {"category": "expenses:transport", "amount": Decimal("250.00")},
-        ]
-        result = format_budget_journal(budgets)
-        lines = result.strip().split("\n")
-        assert lines[0] == "~ monthly"
-        assert len(lines) == 4  # header + 3 categories
-        assert "expenses:food:groceries" in lines[1]
-        assert "expenses:dining" in lines[2]
-        assert "expenses:transport" in lines[3]
+    def test_get_budgets_empty(self, db):
+        """Empty DB returns empty list."""
+        budgets = get_budgets(db)
+        assert budgets == []
 
-    def test_proper_indentation(self) -> None:
-        """Each category line starts with 4 spaces."""
-        result = format_budget_journal([
-            {"category": "expenses:food", "amount": Decimal("100.00")}
-        ])
-        lines = result.strip().split("\n")
-        for line in lines[1:]:
-            assert line.startswith("    ")
+    def test_upsert_and_get_budget(self, db):
+        """Insert a budget then retrieve it."""
+        budget = Budget(
+            category="expenses:food:groceries",
+            amount="500.00",
+            period="monthly",
+            rollover=0,
+        )
+        row_id = upsert_budget(db, budget)
+        assert row_id is not None and row_id > 0
 
-    def test_large_amount_formatting(self) -> None:
-        """Amounts >= 1000 get comma formatting."""
-        result = format_budget_journal([
-            {"category": "expenses:housing:rent", "amount": Decimal("2500.00")}
-        ])
-        assert "$2,500.00" in result
+        budgets = get_budgets(db)
+        assert len(budgets) == 1
+        assert budgets[0].category == "expenses:food:groceries"
+        assert budgets[0].amount == "500.00"
+        assert budgets[0].rollover == 0
+        assert budgets[0].id == row_id
 
-    def test_empty_list(self) -> None:
-        """Empty budget list produces just the header."""
-        result = format_budget_journal([])
-        assert result.strip() == "~ monthly"
+    def test_upsert_update_existing(self, db):
+        """Update an existing budget."""
+        budget = Budget(
+            category="expenses:food",
+            amount="500.00",
+            period="monthly",
+        )
+        row_id = upsert_budget(db, budget)
+
+        # Update it
+        budget.id = row_id
+        budget.amount = "600.00"
+        budget.rollover = 1
+        upsert_budget(db, budget)
+
+        budgets = get_budgets(db)
+        assert len(budgets) == 1
+        assert budgets[0].amount == "600.00"
+        assert budgets[0].rollover == 1
+
+    def test_multiple_budgets_ordered(self, db):
+        """Multiple budgets return ordered by category."""
+        upsert_budget(db, Budget(category="expenses:food", amount="500"))
+        upsert_budget(db, Budget(category="expenses:dining", amount="200"))
+        upsert_budget(db, Budget(category="expenses:transport", amount="300"))
+
+        budgets = get_budgets(db)
+        assert len(budgets) == 3
+        categories = [b.category for b in budgets]
+        assert categories == sorted(categories)
+
+    def test_delete_budget(self, db):
+        """Delete a budget by id."""
+        budget = Budget(category="expenses:food", amount="500")
+        row_id = upsert_budget(db, budget)
+
+        delete_budget(db, row_id)
+        budgets = get_budgets(db)
+        assert len(budgets) == 0
+
+    def test_delete_nonexistent(self, db):
+        """Deleting a nonexistent budget doesn't raise."""
+        delete_budget(db, 9999)  # Should not raise
+
+    def test_get_budgets_with_month_param(self, db):
+        """get_budgets accepts month param (currently ignored, returns all)."""
+        upsert_budget(db, Budget(category="expenses:food", amount="500"))
+        budgets = get_budgets(db, month="2026-01")
+        assert len(budgets) == 1
+
+    def test_get_budgets_with_connection(self, db):
+        """get_budgets works with raw sqlite3.Connection too."""
+        conn = db.connect()
+        upsert_budget(conn, Budget(category="expenses:food", amount="500"))
+        budgets = get_budgets(conn)
+        assert len(budgets) == 1
 
 
 # ---------------------------------------------------------------------------
-# BudgetStatus.display_percentage
+# Database CRUD: goals
 # ---------------------------------------------------------------------------
 
 
-class TestDisplayPercentage:
-    def test_normal_percentage(self) -> None:
-        """75% spent displays as 75."""
-        status = BudgetStatus(
-            category="test",
-            budgeted=Decimal("100"),
-            spent=Decimal("75"),
-            remaining=Decimal("25"),
-            percentage=0.75,
-            rollover_amount=Decimal("0"),
-            is_over=False,
-        )
-        assert status.display_percentage == 75
+class TestGoalCRUD:
+    """Test goal DB operations."""
 
-    def test_zero_percentage(self) -> None:
-        """0% displays as 0."""
-        status = BudgetStatus(
-            category="test",
-            budgeted=Decimal("100"),
-            spent=Decimal("0"),
-            remaining=Decimal("100"),
-            percentage=0.0,
-            rollover_amount=Decimal("0"),
-            is_over=False,
-        )
-        assert status.display_percentage == 0
+    def test_get_goals_empty(self, db):
+        """Empty DB returns empty list."""
+        goals = get_goals(db)
+        assert goals == []
 
-    def test_over_100_percent(self) -> None:
-        """150% spent displays as 150."""
-        status = BudgetStatus(
-            category="test",
-            budgeted=Decimal("100"),
-            spent=Decimal("150"),
-            remaining=Decimal("-50"),
-            percentage=1.5,
-            rollover_amount=Decimal("0"),
-            is_over=True,
+    def test_upsert_and_get_goal(self, db):
+        """Insert a goal then retrieve it."""
+        goal = Goal(
+            name="Emergency Fund",
+            target_amount="10000.00",
+            current_amount="2500.00",
+            account="assets:savings",
+            target_date="2026-12-31",
         )
-        assert status.display_percentage == 150
+        row_id = upsert_goal(db, goal)
+        assert row_id is not None and row_id > 0
 
-    def test_clamped_at_999(self) -> None:
-        """Extreme overspend is clamped to 999."""
-        status = BudgetStatus(
-            category="test",
-            budgeted=Decimal("10"),
-            spent=Decimal("1500"),
-            remaining=Decimal("-1490"),
-            percentage=150.0,
-            rollover_amount=Decimal("0"),
-            is_over=True,
-        )
-        assert status.display_percentage == 999
+        goals = get_goals(db)
+        assert len(goals) == 1
+        assert goals[0].name == "Emergency Fund"
+        assert goals[0].target_amount == "10000.00"
+        assert goals[0].current_amount == "2500.00"
+        assert goals[0].account == "assets:savings"
+        assert goals[0].target_date == "2026-12-31"
 
-    def test_clamped_at_zero(self) -> None:
-        """Negative percentage (shouldn't happen) clamps to 0."""
-        status = BudgetStatus(
-            category="test",
-            budgeted=Decimal("100"),
-            spent=Decimal("0"),
-            remaining=Decimal("100"),
-            percentage=-0.5,
-            rollover_amount=Decimal("0"),
-            is_over=False,
+    def test_upsert_update_goal(self, db):
+        """Update an existing goal's progress."""
+        goal = Goal(
+            name="Vacation",
+            target_amount="5000.00",
+            current_amount="1000.00",
         )
-        assert status.display_percentage == 0
+        row_id = upsert_goal(db, goal)
 
-    def test_fractional_rounds_down(self) -> None:
-        """33.3% truncates to 33 (int conversion)."""
-        status = BudgetStatus(
-            category="test",
-            budgeted=Decimal("300"),
-            spent=Decimal("100"),
-            remaining=Decimal("200"),
-            percentage=1 / 3,
-            rollover_amount=Decimal("0"),
-            is_over=False,
-        )
-        assert status.display_percentage == 33
+        goal.id = row_id
+        goal.current_amount = "2000.00"
+        upsert_goal(db, goal)
 
-    def test_just_under_100(self) -> None:
-        """99.9% truncates to 99."""
-        status = BudgetStatus(
-            category="test",
-            budgeted=Decimal("1000"),
-            spent=Decimal("999"),
-            remaining=Decimal("1"),
-            percentage=0.999,
-            rollover_amount=Decimal("0"),
-            is_over=False,
+        goals = get_goals(db)
+        assert len(goals) == 1
+        assert goals[0].current_amount == "2000.00"
+
+    def test_multiple_goals(self, db):
+        """Multiple goals can be stored and retrieved."""
+        upsert_goal(db, Goal(name="Goal A", target_amount="1000"))
+        upsert_goal(db, Goal(name="Goal B", target_amount="2000"))
+
+        goals = get_goals(db)
+        assert len(goals) == 2
+
+
+# ---------------------------------------------------------------------------
+# Database: recurring transactions / get_due_recurring
+# ---------------------------------------------------------------------------
+
+
+class TestRecurringQueries:
+    """Test recurring transaction queries."""
+
+    def test_get_due_recurring_empty(self, db):
+        """Empty DB returns empty list."""
+        result = get_due_recurring(db, "2026-03-01")
+        assert result == []
+
+    def test_get_due_recurring_returns_due_items(self, db):
+        """Returns items with next_due on or before the given date."""
+        rec1 = RecurringTransaction(
+            description="Rent",
+            amount="1500.00",
+            from_account="assets:checking",
+            to_account="expenses:housing:rent",
+            frequency="monthly",
+            next_due="2026-02-25",
+            active=1,
         )
-        assert status.display_percentage == 99
+        rec2 = RecurringTransaction(
+            description="Netflix",
+            amount="15.99",
+            from_account="assets:checking",
+            to_account="expenses:entertainment",
+            frequency="monthly",
+            next_due="2026-02-28",
+            active=1,
+        )
+        rec3 = RecurringTransaction(
+            description="Car Insurance",
+            amount="200.00",
+            from_account="assets:checking",
+            to_account="expenses:insurance",
+            frequency="monthly",
+            next_due="2026-03-15",  # After window
+            active=1,
+        )
+        upsert_recurring(db, rec1)
+        upsert_recurring(db, rec2)
+        upsert_recurring(db, rec3)
+
+        # Query for items due on or before March 1
+        due = get_due_recurring(db, "2026-03-01")
+        assert len(due) == 2
+        descriptions = [r.description for r in due]
+        assert "Rent" in descriptions
+        assert "Netflix" in descriptions
+        assert "Car Insurance" not in descriptions
+
+    def test_get_due_recurring_excludes_inactive(self, db):
+        """Inactive recurring transactions are excluded."""
+        rec = RecurringTransaction(
+            description="Old Subscription",
+            amount="10.00",
+            from_account="assets:checking",
+            to_account="expenses:subscriptions",
+            frequency="monthly",
+            next_due="2026-02-20",
+            active=0,
+        )
+        upsert_recurring(db, rec)
+
+        due = get_due_recurring(db, "2026-03-01")
+        assert len(due) == 0
+
+    def test_get_due_recurring_no_date_returns_all_active(self, db):
+        """When no date is given, returns all active items."""
+        rec1 = RecurringTransaction(
+            description="Rent",
+            amount="1500.00",
+            from_account="assets:checking",
+            to_account="expenses:housing",
+            frequency="monthly",
+            next_due="2026-02-25",
+            active=1,
+        )
+        rec2 = RecurringTransaction(
+            description="Inactive",
+            amount="10.00",
+            from_account="assets:checking",
+            to_account="expenses:other",
+            frequency="monthly",
+            next_due="2026-02-20",
+            active=0,
+        )
+        upsert_recurring(db, rec1)
+        upsert_recurring(db, rec2)
+
+        due = get_due_recurring(db)
+        assert len(due) == 1
+        assert due[0].description == "Rent"
+
+    def test_get_due_recurring_ordered_by_next_due(self, db):
+        """Results are ordered by next_due ascending."""
+        upsert_recurring(db, RecurringTransaction(
+            description="Later",
+            amount="100",
+            from_account="a",
+            to_account="b",
+            frequency="monthly",
+            next_due="2026-02-28",
+            active=1,
+        ))
+        upsert_recurring(db, RecurringTransaction(
+            description="Earlier",
+            amount="50",
+            from_account="a",
+            to_account="b",
+            frequency="monthly",
+            next_due="2026-02-20",
+            active=1,
+        ))
+
+        due = get_due_recurring(db, "2026-03-01")
+        assert due[0].description == "Earlier"
+        assert due[1].description == "Later"

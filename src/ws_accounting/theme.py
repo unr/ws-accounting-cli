@@ -1,4 +1,4 @@
-"""Accessible financial themes -- blue/orange semantic colors (not red/green)."""
+"""Accessible financial themes — blue/orange semantic pairing."""
 
 from textual.theme import Theme
 
@@ -7,8 +7,8 @@ financial_dark = Theme(
     primary="#4FC3F7",
     secondary="#81D4FA",
     accent="#FFB74D",
-    success="#4FC3F7",
-    error="#FF8A65",
+    success="#4FC3F7",       # Blue (not green) — income/positive
+    error="#FF8A65",         # Orange (not red) — expenses/negative
     warning="#FFB74D",
     background="#1A1A2E",
     surface="#16213E",

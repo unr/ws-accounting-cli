@@ -1,77 +1,63 @@
-/* Settings screen styles. */
+/* Settings screen styles */
 
 SettingsScreen {
-    layout: vertical;
+    align: center middle;
 }
-
-/* ── Title ─────────────────────────────────────────── */
 
 #settings-title {
     text-style: bold;
     text-align: center;
-    width: 1fr;
-    padding: 1 0;
-    dock: top;
-    background: $surface;
+    margin-bottom: 1;
+    color: $text;
+    width: 100%;
 }
-
-/* ── Tabbed Content ────────────────────────────────── */
 
 #settings-tabs {
     height: 1fr;
-    width: 1fr;
+    margin: 0 2;
 }
-
-/* ── Form layout ───────────────────────────────────── */
 
 .settings-form {
     padding: 1 2;
     height: auto;
-    max-width: 80;
 }
 
 .field-label {
     margin-top: 1;
     margin-bottom: 0;
     color: $text;
+    text-style: bold;
 }
 
 .settings-form Input {
-    width: 1fr;
     margin-bottom: 1;
 }
 
 .settings-form Select {
-    width: 1fr;
     margin-bottom: 1;
 }
-
-/* ── Switch rows ───────────────────────────────────── */
 
 .switch-row {
     height: 3;
     margin: 1 0;
-    align: left middle;
 }
 
 .switch-label {
+    padding-top: 1;
     width: auto;
-    min-width: 20;
-    padding-right: 2;
+    margin-right: 2;
 }
-
-/* ── Info note ─────────────────────────────────────── */
-
-.info-note {
-    color: $text-muted;
-    margin: 1 0;
-    padding: 1 2;
-    border: round $panel;
-}
-
-/* ── Save buttons ──────────────────────────────────── */
 
 .save-btn {
     margin-top: 2;
-    align: right middle;
+    width: auto;
+}
+
+.info-note {
+    color: $text-muted;
+    text-style: italic;
+    margin: 1 0;
+    padding: 1 2;
+    background: $surface;
+    border: round $primary-muted;
 }

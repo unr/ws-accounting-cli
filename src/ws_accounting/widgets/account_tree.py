@@ -1,83 +1,70 @@
-"""Tree widget for displaying hledger account hierarchy."""
+"""Account hierarchy tree widget."""
 
-from __future__ import annotations
+from decimal import Decimal
 
 from textual.message import Message
 from textual.widgets import Tree
-from textual.widgets._tree import TreeNode
 
 
-class AccountTree(Tree[str]):
-    """Tree widget that displays the hledger account hierarchy.
-
-    Each node stores the full account name as its data.
-    The tree is built from a flat list of colon-separated account names.
-    """
+class AccountTree(Tree):
+    """Tree widget displaying account hierarchy with inline balances."""
 
     DEFAULT_CSS = """
     AccountTree {
         height: 1fr;
-        border: round $primary;
-        padding: 0 1;
     }
     """
 
+    BINDINGS = [
+        ("j", "cursor_down", "Down"),
+        ("k", "cursor_up", "Up"),
+        ("h", "toggle_node", "Collapse"),
+        ("l", "toggle_node", "Expand"),
+        ("space", "toggle_node", "Toggle"),
+    ]
+
     class AccountSelected(Message):
-        """Fired when the user selects an account in the tree."""
+        """Fired when a leaf account is selected."""
 
         def __init__(self, account: str) -> None:
-            self.account = account
             super().__init__()
+            self.account = account
 
-    def __init__(self, **kwargs) -> None:
-        super().__init__("Accounts", **kwargs)
+    def __init__(self, label: str = "Accounts", **kwargs) -> None:
+        super().__init__(label, **kwargs)
 
-    def load_accounts(self, accounts: list[str]) -> None:
-        """Build the tree from a flat list of account names.
+    def load_accounts(self, data: dict[str, Decimal] | list[str]) -> None:
+        """Build tree from account:balance mapping or a list of account names.
 
-        Account names are colon-separated, e.g.:
-            assets:bank:checking
-            assets:bank:savings
-            expenses:food:groceries
+        Accepts either:
+          - dict[str, Decimal]: account -> balance mapping
+          - list[str]: flat list of account names (balances shown as 0)
         """
         self.clear()
-        root = self.root
-        root.expand()
+        nodes: dict[str, object] = {}
 
-        # Build a nested dict to represent the hierarchy
-        hierarchy: dict = {}
-        for account in sorted(accounts):
+        # Normalize to dict
+        if isinstance(data, list):
+            balances: dict[str, Decimal] = {acct: Decimal("0") for acct in data}
+        else:
+            balances = data
+
+        for account, balance in sorted(balances.items()):
             parts = account.split(":")
-            node = hierarchy
-            for part in parts:
-                if part not in node:
-                    node[part] = {}
-                node = node[part]
+            parent = self.root
+            for i, part in enumerate(parts):
+                path = ":".join(parts[: i + 1])
+                if path not in nodes:
+                    if path == account and balance != Decimal("0"):
+                        label = f"{part}  ${abs(balance):,.2f}"
+                    else:
+                        label = part
+                    nodes[path] = parent.add(label, data={"account": path, "balance": balance})
+                parent = nodes[path]
+        self.root.expand_all()
 
-        # Recursively add nodes to the tree
-        self._add_children(root, hierarchy, "")
-
-    def _add_children(
-        self,
-        parent: TreeNode[str],
-        children: dict,
-        prefix: str,
-    ) -> None:
-        """Recursively add child nodes."""
-        for name, subtree in sorted(children.items()):
-            full_name = f"{prefix}:{name}" if prefix else name
-            if subtree:
-                # Has children -- add as expandable branch
-                node = parent.add(name, data=full_name)
-                node.expand()
-                self._add_children(node, subtree, full_name)
-            else:
-                # Leaf node
-                parent.add_leaf(name, data=full_name)
-
-    def on_tree_node_selected(
-        self, event: Tree.NodeSelected[str]
-    ) -> None:
-        """Post an AccountSelected message when a node is selected."""
-        if event.node.data is not None:
-            self.post_message(self.AccountSelected(event.node.data))
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        """Post AccountSelected when a tree node is selected."""
+        node_data = event.node.data
+        if node_data and isinstance(node_data, dict) and "account" in node_data:
+            self.post_message(self.AccountSelected(node_data["account"]))

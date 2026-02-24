@@ -1,4 +1,4 @@
-"""Onboarding screen -- first-run wizard for initial setup."""
+"""Onboarding screen -- first-run setup wizard (4-step ModalScreen)."""
 
 from __future__ import annotations
 
@@ -8,20 +8,19 @@ import shutil
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.screen import Screen
+from textual.containers import Center, Horizontal, Vertical
+from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
-    Checkbox,
     ContentSwitcher,
-    Footer,
     Input,
     Label,
+    Select,
     Static,
 )
 
 from ws_accounting.config.defaults import DEFAULT_COMMODITY
-from ws_accounting.config.paths import default_journal_dir, package_data_dir
+from ws_accounting.config.paths import get_default_journal_dir
 from ws_accounting.config.settings import AppConfig
 
 log = logging.getLogger(__name__)
@@ -64,15 +63,35 @@ def _get_install_guide() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Step IDs
+# Constants
 # ---------------------------------------------------------------------------
 
 STEP_IDS = [
     "step-hledger",
-    "step-journal",
-    "step-currency",
+    "step-preferences",
     "step-api-key",
-    "step-sample-data",
+    "step-finish",
+]
+
+MONTH_OPTIONS: list[tuple[str, int]] = [
+    ("January", 1),
+    ("February", 2),
+    ("March", 3),
+    ("April", 4),
+    ("May", 5),
+    ("June", 6),
+    ("July", 7),
+    ("August", 8),
+    ("September", 9),
+    ("October", 10),
+    ("November", 11),
+    ("December", 12),
+]
+
+FINISH_CHOICES: list[tuple[str, str]] = [
+    ("Start empty", "empty"),
+    ("Load sample data", "sample"),
+    ("Import first CSV", "import"),
 ]
 
 
@@ -81,45 +100,47 @@ STEP_IDS = [
 # ---------------------------------------------------------------------------
 
 
-class OnboardingScreen(Screen):
-    """First-run onboarding wizard -- 5-step linear flow."""
+class OnboardingScreen(ModalScreen[bool]):
+    """First-run setup wizard -- 4-step modal overlay."""
 
     CSS_PATH = "../styles/onboarding.tcss"
     BINDINGS = []
+
+    DEFAULT_CSS = """
+    OnboardingScreen {
+        align: center middle;
+    }
+    """
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._current_step: int = 0
         self._hledger_found: bool = False
-        self._journal_choice: str = "new"  # "new" or "existing"
-        self._journal_path: str = ""
-        self._currency: str = DEFAULT_COMMODITY
-        self._api_key: str = ""
-        self._load_sample: bool = False
+        self._hledger_version: str = ""
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="onboarding-outer"):
+        with Vertical(id="onboarding-container"):
             yield Static(
-                "ws-accounting Setup Wizard",
+                "ws-accounting Setup",
                 id="onboarding-title",
             )
             yield Static(
-                "Step 1 of 5",
+                "Step 1 of 4",
                 id="step-indicator",
             )
 
             with ContentSwitcher(
                 id="onboarding-switcher", initial="step-hledger"
             ):
-                # --- Step 1: hledger check ---
+                # ── Step 1: hledger check + Journal ──
                 with Vertical(id="step-hledger"):
                     yield Label(
-                        "Step 1: Check hledger Installation",
+                        "Check hledger + Journal Setup",
                         classes="step-title",
                     )
                     yield Label(
-                        "ws-accounting uses hledger as its accounting engine. "
-                        "Let's verify it is installed.",
+                        "ws-accounting uses hledger as its accounting "
+                        "engine. Let's verify it is installed.",
                         classes="step-description",
                     )
                     yield Static(
@@ -132,72 +153,35 @@ class OnboardingScreen(Screen):
                         id="hledger-install-guide",
                         classes="install-guide",
                     )
+                    yield Label(
+                        "Journal directory:",
+                        classes="field-label",
+                    )
+                    yield Input(
+                        value=str(get_default_journal_dir()),
+                        placeholder="~/finances",
+                        id="input-journal-dir",
+                    )
                     with Horizontal(classes="step-buttons"):
                         yield Button(
-                            "Re-check",
+                            "Check Again",
                             variant="default",
                             id="btn-hledger-recheck",
                         )
                         yield Button(
                             "Next",
                             variant="primary",
-                            id="btn-hledger-next",
+                            id="btn-step1-next",
                         )
 
-                # --- Step 2: Journal setup ---
-                with Vertical(id="step-journal"):
+                # ── Step 2: Currency + Preferences ──
+                with Vertical(id="step-preferences"):
                     yield Label(
-                        "Step 2: Journal Setup",
+                        "Currency & Preferences",
                         classes="step-title",
                     )
                     yield Label(
-                        "Choose how to set up your journal file.",
-                        classes="step-description",
-                    )
-                    with Horizontal(id="journal-choice-row"):
-                        yield Button(
-                            "Create New Journal",
-                            variant="primary",
-                            id="btn-journal-new",
-                            classes="choice-btn",
-                        )
-                        yield Button(
-                            "Use Existing Journal",
-                            variant="default",
-                            id="btn-journal-existing",
-                            classes="choice-btn",
-                        )
-                    yield Static(
-                        "",
-                        id="journal-choice-info",
-                        classes="info-text",
-                    )
-                    yield Input(
-                        placeholder="Path to existing journal file...",
-                        id="journal-path-input",
-                        classes="hidden-field",
-                    )
-                    yield Static("", id="journal-error", classes="error-text")
-                    with Horizontal(classes="step-buttons"):
-                        yield Button(
-                            "Back",
-                            variant="default",
-                            id="btn-journal-back",
-                        )
-                        yield Button(
-                            "Next",
-                            variant="primary",
-                            id="btn-journal-next",
-                        )
-
-                # --- Step 3: Currency ---
-                with Vertical(id="step-currency"):
-                    yield Label(
-                        "Step 3: Primary Currency",
-                        classes="step-title",
-                    )
-                    yield Label(
-                        "Enter your primary currency/commodity symbol.",
+                        "Set your primary currency and fiscal year start.",
                         classes="step-description",
                     )
                     yield Label(
@@ -207,30 +191,45 @@ class OnboardingScreen(Screen):
                     yield Input(
                         value=DEFAULT_COMMODITY,
                         placeholder="$",
-                        id="currency-input",
+                        id="input-onb-currency",
+                    )
+                    yield Label(
+                        "Fiscal year start month:",
+                        classes="field-label",
+                    )
+                    yield Select(
+                        MONTH_OPTIONS,
+                        value=1,
+                        id="select-onb-fiscal",
+                        allow_blank=False,
                     )
                     with Horizontal(classes="step-buttons"):
                         yield Button(
                             "Back",
                             variant="default",
-                            id="btn-currency-back",
+                            id="btn-step2-back",
+                        )
+                        yield Button(
+                            "Skip",
+                            variant="default",
+                            id="btn-step2-skip",
                         )
                         yield Button(
                             "Next",
                             variant="primary",
-                            id="btn-currency-next",
+                            id="btn-step2-next",
                         )
 
-                # --- Step 4: API Key ---
+                # ── Step 3: API Key (optional) ──
                 with Vertical(id="step-api-key"):
                     yield Label(
-                        "Step 4: AI Features (Optional)",
+                        "AI Features (Optional)",
                         classes="step-title",
                     )
                     yield Label(
                         "Enter your Claude API key to enable AI-powered "
-                        "categorization and insights. You can skip this "
-                        "and add it later in Settings.",
+                        "categorization and insights. You can always add "
+                        "this later in Settings.",
                         classes="step-description",
                     )
                     yield Label(
@@ -239,64 +238,65 @@ class OnboardingScreen(Screen):
                     )
                     yield Input(
                         placeholder="sk-ant-...",
-                        id="api-key-input",
+                        id="input-onb-api-key",
                         password=True,
                     )
                     with Horizontal(classes="step-buttons"):
                         yield Button(
                             "Back",
                             variant="default",
-                            id="btn-api-back",
+                            id="btn-step3-back",
                         )
                         yield Button(
                             "Skip",
-                            variant="default",
-                            id="btn-api-skip",
+                            variant="warning",
+                            id="btn-step3-skip",
                         )
                         yield Button(
                             "Next",
                             variant="primary",
-                            id="btn-api-next",
+                            id="btn-step3-next",
                         )
 
-                # --- Step 5: Sample data ---
-                with Vertical(id="step-sample-data"):
+                # ── Step 4: Get Started ──
+                with Vertical(id="step-finish"):
                     yield Label(
-                        "Step 5: Sample Data (Optional)",
+                        "Get Started",
                         classes="step-title",
                     )
                     yield Label(
-                        "Load sample transactions to explore the app "
-                        "before adding your own data. This creates 3 months "
-                        "of realistic demo transactions.",
+                        "Choose how you want to begin:",
                         classes="step-description",
                     )
-                    with Horizontal(id="sample-checkbox-row"):
-                        yield Checkbox(
-                            "Load sample data",
-                            id="sample-data-checkbox",
-                            value=False,
-                        )
+                    yield Select(
+                        FINISH_CHOICES,
+                        value="empty",
+                        id="select-finish-choice",
+                        allow_blank=False,
+                    )
+                    yield Static(
+                        "",
+                        id="finish-info",
+                        classes="info-text",
+                    )
                     with Horizontal(classes="step-buttons"):
                         yield Button(
                             "Back",
                             variant="default",
-                            id="btn-sample-back",
+                            id="btn-step4-back",
                         )
                         yield Button(
-                            "Finish",
+                            "Finish Setup",
                             variant="success",
                             id="btn-finish",
                         )
-
-        yield Footer()
 
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
     def on_mount(self) -> None:
-        """Check hledger on mount."""
+        """Check hledger installation on mount."""
         self._check_hledger()
 
     # ------------------------------------------------------------------
@@ -304,7 +304,7 @@ class OnboardingScreen(Screen):
     # ------------------------------------------------------------------
 
     def _check_hledger(self) -> None:
-        """Check whether hledger is on PATH."""
+        """Quick synchronous check: is hledger on PATH?"""
         hledger_path = shutil.which("hledger")
         status_widget = self.query_one("#hledger-status", Static)
         guide_widget = self.query_one("#hledger-install-guide", Static)
@@ -315,14 +315,26 @@ class OnboardingScreen(Screen):
             status_widget.add_class("status-ok")
             status_widget.remove_class("status-error")
             guide_widget.update("")
+            # Also run async version check
+            self.run_worker(self._async_version_check(), exclusive=True)
         else:
             self._hledger_found = False
-            status_widget.update(
-                "hledger not found on PATH"
-            )
+            status_widget.update("hledger not found on PATH")
             status_widget.add_class("status-error")
             status_widget.remove_class("status-ok")
             guide_widget.update(_get_install_guide())
+
+    async def _async_version_check(self) -> None:
+        """Run async hledger version check for detailed info."""
+        try:
+            from ws_accounting.core.hledger import HLedgerGateway
+
+            version = await HLedgerGateway.check_version()
+            self._hledger_version = version
+            status_widget = self.query_one("#hledger-status", Static)
+            status_widget.update(f"hledger v{version} found")
+        except Exception as exc:
+            log.debug("hledger version check failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Navigation
@@ -342,53 +354,44 @@ class OnboardingScreen(Screen):
     # Button routing
     # ------------------------------------------------------------------
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:  # noqa: C901
-        """Route button presses to handlers."""
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Route all button presses."""
         bid = event.button.id
 
-        # Step 1: hledger
+        # Step 1
         if bid == "btn-hledger-recheck":
             self._check_hledger()
-        elif bid == "btn-hledger-next":
-            self._handle_hledger_next()
+        elif bid == "btn-step1-next":
+            self._handle_step1_next()
 
-        # Step 2: Journal
-        elif bid == "btn-journal-new":
-            self._select_journal_choice("new")
-        elif bid == "btn-journal-existing":
-            self._select_journal_choice("existing")
-        elif bid == "btn-journal-back":
+        # Step 2
+        elif bid == "btn-step2-back":
             self._go_to_step(0)
-        elif bid == "btn-journal-next":
-            self._handle_journal_next()
-
-        # Step 3: Currency
-        elif bid == "btn-currency-back":
-            self._go_to_step(1)
-        elif bid == "btn-currency-next":
-            self._handle_currency_next()
-
-        # Step 4: API Key
-        elif bid == "btn-api-back":
+        elif bid == "btn-step2-skip":
             self._go_to_step(2)
-        elif bid == "btn-api-skip":
-            self._api_key = ""
-            self._go_to_step(4)
-        elif bid == "btn-api-next":
-            self._handle_api_next()
+        elif bid == "btn-step2-next":
+            self._handle_step2_next()
 
-        # Step 5: Sample data / Finish
-        elif bid == "btn-sample-back":
+        # Step 3
+        elif bid == "btn-step3-back":
+            self._go_to_step(1)
+        elif bid == "btn-step3-skip":
             self._go_to_step(3)
+        elif bid == "btn-step3-next":
+            self._handle_step3_next()
+
+        # Step 4
+        elif bid == "btn-step4-back":
+            self._go_to_step(2)
         elif bid == "btn-finish":
             self._handle_finish()
 
     # ------------------------------------------------------------------
-    # Step 1 handler
+    # Step handlers
     # ------------------------------------------------------------------
 
-    def _handle_hledger_next(self) -> None:
-        """Advance past hledger check (warn if not found)."""
+    def _handle_step1_next(self) -> None:
+        """Validate step 1 and advance."""
         if not self._hledger_found:
             self.notify(
                 "hledger not found. Some features will not work "
@@ -397,153 +400,88 @@ class OnboardingScreen(Screen):
             )
         self._go_to_step(1)
 
-    # ------------------------------------------------------------------
-    # Step 2 handler
-    # ------------------------------------------------------------------
-
-    def _select_journal_choice(self, choice: str) -> None:
-        """Toggle between 'new' and 'existing' journal modes."""
-        self._journal_choice = choice
-        info_widget = self.query_one("#journal-choice-info", Static)
-        path_input = self.query_one("#journal-path-input", Input)
-        new_btn = self.query_one("#btn-journal-new", Button)
-        existing_btn = self.query_one("#btn-journal-existing", Button)
-
-        if choice == "new":
-            journal_dir = default_journal_dir()
-            info_widget.update(
-                f"A new journal will be created at:\n{journal_dir / 'main.journal'}"
-            )
-            path_input.add_class("hidden-field")
-            new_btn.variant = "primary"
-            existing_btn.variant = "default"
-        else:
-            info_widget.update("Enter the path to your existing journal file:")
-            path_input.remove_class("hidden-field")
-            path_input.focus()
-            new_btn.variant = "default"
-            existing_btn.variant = "primary"
-
-    def _handle_journal_next(self) -> None:
-        """Validate journal choice and advance."""
-        error_widget = self.query_one("#journal-error", Static)
-        error_widget.update("")
-
-        if self._journal_choice == "existing":
-            path_input = self.query_one("#journal-path-input", Input)
-            raw = path_input.value.strip()
-            if not raw:
-                error_widget.update("Please enter a journal file path.")
-                return
-            p = Path(raw).expanduser().resolve()
-            if not p.exists():
-                error_widget.update(f"File not found: {p}")
-                return
-            self._journal_path = str(p)
-        else:
-            # Will be created on finish
-            journal_dir = default_journal_dir()
-            self._journal_path = str(journal_dir / "main.journal")
-
-        self._go_to_step(2)
-
-    # ------------------------------------------------------------------
-    # Step 3 handler
-    # ------------------------------------------------------------------
-
-    def _handle_currency_next(self) -> None:
-        """Read currency value and advance."""
-        currency_input = self.query_one("#currency-input", Input)
+    def _handle_step2_next(self) -> None:
+        """Read currency + fiscal year and advance."""
+        currency_input = self.query_one("#input-onb-currency", Input)
         val = currency_input.value.strip()
         if not val:
             self.notify("Currency cannot be empty.", severity="warning")
             return
-        self._currency = val
+        self._go_to_step(2)
+
+    def _handle_step3_next(self) -> None:
+        """Read API key and advance."""
         self._go_to_step(3)
 
-    # ------------------------------------------------------------------
-    # Step 4 handler
-    # ------------------------------------------------------------------
-
-    def _handle_api_next(self) -> None:
-        """Read API key and advance."""
-        api_input = self.query_one("#api-key-input", Input)
-        self._api_key = api_input.value.strip()
-        self._go_to_step(4)
-
-    # ------------------------------------------------------------------
-    # Step 5 / Finish
-    # ------------------------------------------------------------------
-
     def _handle_finish(self) -> None:
-        """Finalize onboarding: create files, save config."""
-        checkbox = self.query_one("#sample-data-checkbox", Checkbox)
-        self._load_sample = checkbox.value
-
+        """Finalize onboarding: create journal dir, save config, dismiss."""
         try:
-            self._create_journal_structure()
-            self._save_config()
+            # Gather values from widgets
+            journal_dir_str = (
+                self.query_one("#input-journal-dir", Input).value.strip()
+            )
+            currency = (
+                self.query_one("#input-onb-currency", Input).value.strip()
+                or DEFAULT_COMMODITY
+            )
+            fiscal_sel = self.query_one("#select-onb-fiscal", Select)
+            fiscal_month = (
+                int(fiscal_sel.value)
+                if fiscal_sel.value is not Select.BLANK
+                else 1
+            )
+            api_key = (
+                self.query_one("#input-onb-api-key", Input).value.strip()
+            )
+            finish_sel = self.query_one("#select-finish-choice", Select)
+            finish_choice = (
+                str(finish_sel.value)
+                if finish_sel.value is not Select.BLANK
+                else "empty"
+            )
+
+            # Ensure journal directory exists
+            journal_dir = Path(journal_dir_str).expanduser().resolve()
+            journal_dir.mkdir(parents=True, exist_ok=True)
+
+            # Create a minimal journal file if none exists
+            main_journal = journal_dir / "main.journal"
+            if not main_journal.exists():
+                commodity_line = (
+                    f"commodity {currency}1,000.00"
+                    if currency == "$"
+                    else f"commodity {currency}"
+                )
+                main_journal.write_text(
+                    f"; ws-accounting main journal\n"
+                    f"{commodity_line}\n\n"
+                )
+
+            # Save config
+            config = AppConfig.load()
+            config.journal_dir = journal_dir
+            config.currency = currency
+            config.fiscal_year_start = fiscal_month
+            config.first_run = False
+            if api_key:
+                config.ai.api_key = api_key
+            config.save()
+
+            # Handle finish choice
+            if finish_choice == "import":
+                self.dismiss(True)
+                # Switch to CSV import after dismiss
+                self.app.call_later(
+                    lambda: self.app.action_switch_to("csv_import")
+                )
+                return
+
             self.notify(
                 "Setup complete! Welcome to ws-accounting.",
                 severity="information",
             )
-            self.app.pop_screen()
+            self.dismiss(True)
+
         except Exception as exc:
             log.exception("Onboarding finish failed")
-            self.notify(
-                f"Setup error: {exc}",
-                severity="error",
-            )
-
-    def _create_journal_structure(self) -> None:
-        """Create journal directory and files if using 'new' mode."""
-        if self._journal_choice != "new":
-            return
-
-        journal_path = Path(self._journal_path)
-        journal_dir = journal_path.parent
-        journal_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy default accounts journal
-        data_dir = package_data_dir()
-        default_accounts_src = data_dir / "default_accounts.journal"
-        accounts_dest = journal_dir / "accounts.journal"
-
-        if default_accounts_src.exists() and not accounts_dest.exists():
-            shutil.copy2(default_accounts_src, accounts_dest)
-
-        # Create main journal if it doesn't exist
-        if not journal_path.exists():
-            commodity_line = (
-                f"commodity {self._currency}1,000.00"
-                if self._currency == "$"
-                else f"commodity {self._currency}"
-            )
-            journal_path.write_text(
-                f"; ws-accounting main journal\n"
-                f"{commodity_line}\n\n"
-                f"include accounts.journal\n"
-            )
-
-        # Optionally copy sample data
-        if self._load_sample:
-            sample_src = data_dir / "sample_journal.journal"
-            sample_dest = journal_dir / "sample_journal.journal"
-            if sample_src.exists() and not sample_dest.exists():
-                shutil.copy2(sample_src, sample_dest)
-                # Add include to main journal
-                main_text = journal_path.read_text()
-                if "sample_journal.journal" not in main_text:
-                    journal_path.write_text(
-                        main_text.rstrip() + "\n\ninclude sample_journal.journal\n"
-                    )
-
-    def _save_config(self) -> None:
-        """Persist configuration to TOML."""
-        config = AppConfig.load()
-        config.first_run = False
-        config.journal_path = self._journal_path
-        config.currency = self._currency
-        if self._api_key:
-            config.ai.api_key = self._api_key
-        config.save()
+            self.notify(f"Setup error: {exc}", severity="error")

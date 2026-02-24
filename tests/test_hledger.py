@@ -1,178 +1,102 @@
 """Tests for HLedger subprocess gateway."""
 
-import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from ws_accounting.core.hledger import (
-    HLedgerError,
     HLedgerGateway,
-    HLedgerNotFoundError,
-    _parse_ver,
+    HledgerError,
+    MIN_VERSION,
 )
 
 
-class TestHLedgerGatewayConstruction:
-    def test_default_path(self, tmp_path: Path) -> None:
-        journal = tmp_path / "test.journal"
-        gw = HLedgerGateway(journal_path=journal)
-        assert gw.journal_path == journal
-        # hledger_path is either found via which or falls back to "hledger"
-        assert isinstance(gw.hledger_path, str)
-
-    def test_custom_hledger_path(self, tmp_path: Path) -> None:
-        journal = tmp_path / "test.journal"
-        gw = HLedgerGateway(
-            journal_path=journal, hledger_path="/usr/local/bin/hledger"
-        )
-        assert gw.hledger_path == "/usr/local/bin/hledger"
-
-    def test_journal_path_stored(self, tmp_path: Path) -> None:
-        journal = tmp_path / "finances" / "main.journal"
-        gw = HLedgerGateway(journal_path=journal)
-        assert gw.journal_path == journal
-
-
-class TestParseVer:
-    def test_simple_version(self) -> None:
-        assert _parse_ver("1.30") == (1, 30)
-
-    def test_three_part_version(self) -> None:
-        assert _parse_ver("1.34.1") == (1, 34, 1)
-
-    def test_comparison(self) -> None:
-        assert _parse_ver("1.34") > _parse_ver("1.30")
-        assert _parse_ver("1.29") < _parse_ver("1.30")
-        assert _parse_ver("2.0") > _parse_ver("1.99")
-
-
-class TestCheckInstallation:
+@pytest.mark.hledger
+class TestCheckVersion:
     @pytest.mark.asyncio
-    async def test_not_found_raises(self, tmp_path: Path) -> None:
-        journal = tmp_path / "test.journal"
-        gw = HLedgerGateway(
-            journal_path=journal, hledger_path="hledger"
-        )
-        with patch("ws_accounting.core.hledger.shutil.which", return_value=None):
-            with pytest.raises(HLedgerNotFoundError, match="not found"):
-                await gw.check_installation()
+    async def test_check_version_succeeds(self) -> None:
+        """hledger is installed on this machine at >= 1.51."""
+        version = await HLedgerGateway.check_version()
+        parts = tuple(int(x) for x in version.split("."))
+        assert parts >= MIN_VERSION
 
     @pytest.mark.asyncio
-    async def test_version_too_old(self, tmp_path: Path) -> None:
-        journal = tmp_path / "test.journal"
-        gw = HLedgerGateway(
-            journal_path=journal, hledger_path="/usr/bin/hledger"
-        )
+    async def test_check_version_returns_string(self) -> None:
+        version = await HLedgerGateway.check_version()
+        assert isinstance(version, str)
+        assert "." in version
 
-        mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(
-            return_value=(b"hledger 1.20, linux-x86_64\n", b"")
-        )
 
-        with (
-            patch(
-                "ws_accounting.core.hledger.shutil.which",
-                return_value="/usr/bin/hledger",
-            ),
-            patch(
-                "asyncio.create_subprocess_exec",
-                return_value=mock_proc,
-            ),
-        ):
-            with pytest.raises(HLedgerError, match="1.30"):
-                await gw.check_installation()
+@pytest.mark.hledger
+class TestAccounts:
+    @pytest.mark.asyncio
+    async def test_accounts_returns_list_of_strings(
+        self, sample_journal: Path
+    ) -> None:
+        gw = HLedgerGateway()
+        accounts = await gw.accounts(sample_journal)
+        assert isinstance(accounts, list)
+        assert all(isinstance(a, str) for a in accounts)
 
     @pytest.mark.asyncio
-    async def test_valid_version(self, tmp_path: Path) -> None:
-        journal = tmp_path / "test.journal"
-        gw = HLedgerGateway(
-            journal_path=journal, hledger_path="/usr/bin/hledger"
-        )
+    async def test_accounts_contains_expected(
+        self, sample_journal: Path
+    ) -> None:
+        gw = HLedgerGateway()
+        accounts = await gw.accounts(sample_journal)
+        assert "assets:checking" in accounts
+        assert "expenses:food:groceries" in accounts
+        assert "income:salary" in accounts
 
-        mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(
-            return_value=(b"hledger 1.34, linux-x86_64\n", b"")
-        )
 
-        with (
-            patch(
-                "ws_accounting.core.hledger.shutil.which",
-                return_value="/usr/bin/hledger",
-            ),
-            patch(
-                "asyncio.create_subprocess_exec",
-                return_value=mock_proc,
-            ),
-        ):
-            info = await gw.check_installation()
-            assert info.version == "1.34"
-            assert info.path == "/usr/bin/hledger"
+@pytest.mark.hledger
+class TestBalance:
+    @pytest.mark.asyncio
+    async def test_balance_returns_parsed_data(
+        self, sample_journal: Path
+    ) -> None:
+        import json
+
+        gw = HLedgerGateway()
+        result = await gw.balance(sample_journal)
+        # balance returns JSON string from hledger
+        assert isinstance(result, str)
+        data = json.loads(result)
+        assert isinstance(data, list)
+        assert len(data) > 0
+
+
+@pytest.mark.hledger
+class TestCheck:
+    @pytest.mark.asyncio
+    async def test_check_valid_journal(self, sample_journal: Path) -> None:
+        gw = HLedgerGateway()
+        assert await gw.check(sample_journal) is True
+
+
+@pytest.mark.hledger
+class TestPrintTransactions:
+    @pytest.mark.asyncio
+    async def test_print_returns_string(self, sample_journal: Path) -> None:
+        gw = HLedgerGateway()
+        result = await gw.print_transactions(sample_journal)
+        assert isinstance(result, str)
+        assert "Salary" in result or "Groceries" in result
+
+
+@pytest.mark.hledger
+class TestHledgerError:
+    @pytest.mark.asyncio
+    async def test_invalid_journal_path_raises(self, tmp_path: Path) -> None:
+        gw = HLedgerGateway()
+        bad_journal = tmp_path / "nonexistent" / "missing.journal"
+        with pytest.raises(HledgerError):
+            await gw.accounts(bad_journal)
 
     @pytest.mark.asyncio
-    async def test_exact_minimum_version(self, tmp_path: Path) -> None:
-        journal = tmp_path / "test.journal"
-        gw = HLedgerGateway(
-            journal_path=journal, hledger_path="/usr/bin/hledger"
-        )
-
-        mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(
-            return_value=(b"hledger 1.30\n", b"")
-        )
-
-        with (
-            patch(
-                "ws_accounting.core.hledger.shutil.which",
-                return_value="/usr/bin/hledger",
-            ),
-            patch(
-                "asyncio.create_subprocess_exec",
-                return_value=mock_proc,
-            ),
-        ):
-            info = await gw.check_installation()
-            assert info.version == "1.30"
-
-
-class TestRunCommand:
-    @pytest.mark.asyncio
-    async def test_hledger_error_raised(self, tmp_path: Path) -> None:
-        journal = tmp_path / "test.journal"
-        gw = HLedgerGateway(
-            journal_path=journal, hledger_path="/usr/bin/hledger"
-        )
-
-        mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(
-            return_value=(b"", b"hledger: error parsing journal\n")
-        )
-        mock_proc.returncode = 1
-
-        with patch(
-            "asyncio.create_subprocess_exec",
-            return_value=mock_proc,
-        ):
-            with pytest.raises(HLedgerError, match="error parsing"):
-                await gw._run("balance")
-
-    @pytest.mark.asyncio
-    async def test_successful_run(self, tmp_path: Path) -> None:
-        journal = tmp_path / "test.journal"
-        gw = HLedgerGateway(
-            journal_path=journal, hledger_path="/usr/bin/hledger"
-        )
-
-        mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(
-            return_value=(b'[["$100","assets:bank"]]', b"")
-        )
-        mock_proc.returncode = 0
-
-        with patch(
-            "asyncio.create_subprocess_exec",
-            return_value=mock_proc,
-        ):
-            result = await gw._run("balance")
-            assert result == '[["$100","assets:bank"]]'
+    async def test_malformed_journal_raises(self, tmp_path: Path) -> None:
+        bad_journal = tmp_path / "bad.journal"
+        bad_journal.write_text("this is not valid journal syntax 2026-99-99\n")
+        gw = HLedgerGateway()
+        with pytest.raises(HledgerError):
+            await gw.balance(bad_journal)
