@@ -44,7 +44,7 @@ class TestAccounts:
     ) -> None:
         gw = HLedgerGateway()
         accounts = await gw.accounts(sample_journal)
-        assert "assets:bank:checking" in accounts
+        assert "assets:checking" in accounts
         assert "expenses:food:groceries" in accounts
         assert "income:salary" in accounts
 
