@@ -23,22 +23,27 @@ class SummaryCard(Static):
     }
     """
 
-    def __init__(self, title: str = "", **kwargs) -> None:
+    def __init__(self, title: str = "", show_sign: bool = True, **kwargs) -> None:
         super().__init__(**kwargs)
         self._title = title
         self._value = Decimal(0)
+        self._show_sign = show_sign
 
     def compose(self):
         yield Static(self._title, classes="card-title")
-        yield AmountDisplay(self._value)
+        yield AmountDisplay(self._value, show_sign=self._show_sign)
 
-    def update_value(self, value: Decimal) -> None:
+    def update_value(self, value: Decimal, commodity: str | None = None) -> None:
         self._value = value
         try:
             amount_display = self.query_one(AmountDisplay)
-            amount_display.update_amount(value)
+            amount_display.set_amount(value, commodity)
         except Exception:
             pass
+
+    def update_amount(self, value: Decimal, commodity: str | None = None) -> None:
+        """Alias for update_value, matching the dashboard API."""
+        self.update_value(value, commodity)
 
     def show_error(self, message: str) -> None:
         try:

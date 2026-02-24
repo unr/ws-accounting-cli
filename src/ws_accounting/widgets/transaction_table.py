@@ -42,10 +42,18 @@ class TransactionTable(DataTable):
     def __init__(self, **kwargs) -> None:
         super().__init__(cursor_type="row", zebra_stripes=True, **kwargs)
         self._transactions: dict[str, Transaction] = {}
+        self._columns_added = False
+
+    def on_mount(self) -> None:
+        """Add columns when the widget is mounted."""
+        self.setup_columns()
 
     def setup_columns(self) -> None:
-        """Add standard transaction columns."""
+        """Add standard transaction columns (idempotent)."""
+        if self._columns_added:
+            return
         self.add_columns("Date", "Description", "Category", "Amount", "Status")
+        self._columns_added = True
 
     def load_transactions(self, transactions: list[Transaction]) -> None:
         """Load transaction data into the table."""
@@ -74,6 +82,12 @@ class TransactionTable(DataTable):
 
             row_key = self.add_row(date_str, desc, category, amount_str, status)
             self._transactions[str(row_key)] = txn
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Post TransactionSelected when a row is activated."""
+        key = str(event.row_key.value) if event.row_key else None
+        if key and key in self._transactions:
+            self.post_message(self.TransactionSelected(self._transactions[key]))
 
     def action_toggle_selection(self) -> None:
         """Toggle selection on the current row."""

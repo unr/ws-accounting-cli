@@ -1,1 +1,66 @@
-/* accounts screen styles */
+/* Accounts screen styles */
+
+#accounts-layout {
+    height: 1fr;
+    margin: 0 1;
+}
+
+#accounts-tree-pane {
+    width: 1fr;
+    max-width: 40;
+    border: round $primary-muted;
+    padding: 1 2;
+    margin-right: 1;
+}
+
+#account-tree {
+    height: 1fr;
+}
+
+#account-actions {
+    height: auto;
+    margin-top: 1;
+}
+
+#account-actions Button {
+    margin-right: 1;
+}
+
+#accounts-detail-pane {
+    width: 2fr;
+    border: round $primary-muted;
+    padding: 1 2;
+}
+
+#detail-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#detail-balance {
+    height: auto;
+    margin-bottom: 1;
+}
+
+#detail-txns-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#detail-txns {
+    height: 1fr;
+}
+
+#accounts-empty-state {
+    display: none;
+    align: center middle;
+    text-align: center;
+    color: $text-muted;
+    padding: 4 8;
+    height: 1fr;
+}
+
+#balance-display {
+    padding: 1 2;
+    border: round $primary-muted;
+}

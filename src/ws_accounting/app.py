@@ -14,6 +14,7 @@ from ws_accounting.config.paths import database_path, default_journal_dir
 from ws_accounting.config.settings import AppConfig
 from ws_accounting.core.hledger import HLedgerGateway
 from ws_accounting.db.database import Database
+from ws_accounting.screens.onboarding import OnboardingScreen
 from ws_accounting.theme import ALL_THEMES, financial_dark, financial_light
 from ws_accounting.widgets.nav_header import NavHeader
 
@@ -23,10 +24,10 @@ log = logging.getLogger(__name__)
 TAB_TO_MODE: dict[str, str] = {
     "tab-dashboard": "dashboard",
     "tab-transactions": "transactions",
-    "tab-csv_import": "csv_import",
+    "tab-import": "csv_import",
     "tab-budgets": "budgets",
     "tab-reports": "reports",
-    "tab-insights": "insights",
+    "tab-ai": "insights",
     "tab-accounts": "accounts",
     "tab-settings": "settings",
 }
@@ -91,6 +92,21 @@ class WsAccountingApp(App):
 
         # Initialize hledger gateway
         self._init_gateway()
+
+        # Check for first run
+        if self._config.first_run:
+            self.push_screen(
+                OnboardingScreen(),
+                callback=self._on_onboarding_complete,
+            )
+
+    def _on_onboarding_complete(self, result: bool) -> None:
+        """Handle onboarding completion."""
+        if result:
+            # Reload config (onboarding already saved it)
+            self._config = AppConfig.load()
+            # Re-init gateway with possibly updated journal dir
+            self._init_gateway()
 
     def _init_database(self) -> None:
         """Create the database and run migrations."""

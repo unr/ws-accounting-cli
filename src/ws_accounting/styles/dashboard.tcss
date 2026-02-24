@@ -1,1 +1,68 @@
-/* dashboard screen styles */
+/* Dashboard screen styles */
+
+#summary-cards {
+    height: 7;
+    margin: 0 1;
+}
+
+#summary-cards SummaryCard {
+    width: 1fr;
+    margin: 0 1;
+}
+
+#dashboard-body {
+    height: 1fr;
+    margin: 1 0;
+}
+
+#budget-section {
+    width: 1fr;
+    margin: 0 1;
+    border: round $primary-muted;
+    padding: 1 2;
+}
+
+#recent-section {
+    width: 1fr;
+    margin: 0 1;
+    border: round $primary-muted;
+    padding: 1 2;
+}
+
+#budget-bars {
+    height: auto;
+    max-height: 100%;
+}
+
+#recent-txns {
+    height: auto;
+    max-height: 100%;
+}
+
+.txn-row {
+    height: 1;
+}
+
+.muted-text {
+    color: $text-muted;
+    text-style: italic;
+}
+
+#empty-state {
+    display: none;
+    align: center middle;
+    width: 100%;
+    height: 1fr;
+}
+
+#empty-msg {
+    text-align: center;
+    color: $text-muted;
+    padding: 4 8;
+    border: round $primary-muted;
+}
+
+#quick-actions {
+    height: auto;
+    margin: 1;
+}

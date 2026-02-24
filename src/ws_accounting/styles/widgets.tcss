@@ -1,1 +1,88 @@
-/* widgets screen styles */
+/* Shared widget styles */
+
+/* NavHeader */
+NavHeader {
+    height: 3;
+    dock: top;
+}
+
+/* SummaryCard */
+SummaryCard {
+    height: 5;
+    border: round $primary-muted;
+    padding: 0 2;
+}
+
+SummaryCard .card-title {
+    text-style: bold;
+    color: $text-muted;
+}
+
+SummaryCard .card-amount {
+    text-style: bold;
+}
+
+/* PeriodSelector */
+PeriodSelector {
+    height: 3;
+    width: auto;
+}
+
+PeriodSelector Button {
+    width: 3;
+    min-width: 3;
+}
+
+PeriodSelector Static {
+    width: auto;
+    padding: 0 1;
+    text-style: bold;
+}
+
+/* QuickActions */
+QuickActions {
+    height: auto;
+    padding: 1 0;
+}
+
+QuickActions Button {
+    margin-right: 1;
+}
+
+/* BudgetBar */
+BudgetBar {
+    height: auto;
+    margin-bottom: 1;
+}
+
+/* ImportStepper */
+ImportStepper {
+    height: 3;
+}
+
+/* ConfidenceBadge */
+ConfidenceBadge {
+    width: auto;
+    height: 1;
+}
+
+/* AmountDisplay */
+AmountDisplay {
+    width: auto;
+    height: 1;
+}
+
+/* TransactionTable */
+TransactionTable {
+    height: 1fr;
+}
+
+/* AccountTree */
+AccountTree {
+    height: 1fr;
+}
+
+/* CategoryPicker */
+CategoryPicker {
+    height: auto;
+}

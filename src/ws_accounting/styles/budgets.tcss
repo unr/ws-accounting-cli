@@ -1,1 +1,84 @@
-/* budgets screen styles */
+/* Budgets screen styles */
+
+#budgets-header {
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 1;
+}
+
+#budgets-title {
+    text-style: bold;
+    width: auto;
+    margin-right: 2;
+}
+
+.month-nav {
+    width: 3;
+    min-width: 3;
+}
+
+#month-label {
+    width: auto;
+    text-style: bold;
+    padding: 0 1;
+}
+
+#btn-add-budget {
+    width: auto;
+    margin-left: 2;
+}
+
+#budget-summary {
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 1;
+}
+
+#budget-summary Static {
+    width: 1fr;
+    text-align: center;
+    padding: 1 2;
+    border: round $primary-muted;
+    margin: 0 1;
+}
+
+#budgets-list {
+    height: 1fr;
+    margin: 0 1;
+}
+
+#budgets-empty {
+    text-align: center;
+    color: $text-muted;
+    padding: 4 0;
+}
+
+#budgets-lower {
+    height: auto;
+    max-height: 40%;
+    margin: 1 0;
+}
+
+#goals-section {
+    width: 1fr;
+    border: round $primary-muted;
+    padding: 1 2;
+    margin: 0 1;
+}
+
+#recurring-section {
+    width: 1fr;
+    border: round $primary-muted;
+    padding: 1 2;
+    margin: 0 1;
+}
+
+#goals-list {
+    height: auto;
+    max-height: 10;
+}
+
+#recurring-list {
+    height: auto;
+    max-height: 10;
+}

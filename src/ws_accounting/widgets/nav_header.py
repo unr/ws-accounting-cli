@@ -30,6 +30,24 @@ class NavHeader(Tabs):
             *[Tab(label, id=tab_id) for label, tab_id in SCREEN_TABS],
         )
 
-    def set_active(self, tab_id: str) -> None:
-        """Set the active tab by ID."""
+    # Map screen/mode names to tab IDs for convenience
+    _NAME_TO_TAB: dict[str, str] = {
+        "dashboard": "tab-dashboard",
+        "transactions": "tab-transactions",
+        "csv_import": "tab-import",
+        "import": "tab-import",
+        "budgets": "tab-budgets",
+        "reports": "tab-reports",
+        "insights": "tab-ai",
+        "ai": "tab-ai",
+        "accounts": "tab-accounts",
+        "settings": "tab-settings",
+    }
+
+    def set_active(self, name: str) -> None:
+        """Set the active tab by screen/mode name or tab ID."""
+        tab_id = self._NAME_TO_TAB.get(name, name)
+        # If it still doesn't start with "tab-", add the prefix
+        if not tab_id.startswith("tab-"):
+            tab_id = f"tab-{tab_id}"
         self.active = tab_id

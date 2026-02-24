@@ -91,25 +91,3 @@ Screen {
     border: round $primary;
     text-align: center;
 }
-
-/* Screens with placeholder content get centered layout */
-SettingsScreen {
-    align: center middle;
-}
-
-OnboardingScreen {
-    align: center middle;
-}
-
-OnboardingScreen #onboarding-welcome {
-    width: auto;
-    height: auto;
-    padding: 2 4;
-    border: round $primary;
-    text-align: center;
-    margin-bottom: 1;
-}
-
-OnboardingScreen Button {
-    margin: 1 0;
-}

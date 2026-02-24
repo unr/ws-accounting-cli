@@ -1,1 +1,96 @@
-/* onboarding screen styles */
+/* Onboarding screen styles */
+
+OnboardingScreen {
+    align: center middle;
+    background: $background 80%;
+}
+
+#onboarding-container {
+    width: 72;
+    max-width: 90%;
+    max-height: 85%;
+    background: $surface;
+    border: round $primary;
+    padding: 2 3;
+}
+
+#onboarding-title {
+    text-style: bold;
+    text-align: center;
+    color: $primary;
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#step-indicator {
+    text-align: center;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+#onboarding-switcher {
+    height: auto;
+    min-height: 16;
+}
+
+.step-title {
+    text-style: bold;
+    color: $text;
+    margin-bottom: 1;
+}
+
+.step-description {
+    color: $text-muted;
+    margin-bottom: 1;
+}
+
+.field-label {
+    margin-top: 1;
+    margin-bottom: 0;
+    text-style: bold;
+}
+
+#onboarding-container Input {
+    margin-bottom: 1;
+}
+
+#onboarding-container Select {
+    margin-bottom: 1;
+}
+
+.step-buttons {
+    height: auto;
+    margin-top: 2;
+}
+
+.step-buttons Button {
+    margin-right: 1;
+}
+
+.status-box {
+    padding: 1 2;
+    margin: 1 0;
+    border: round $primary-muted;
+}
+
+.status-ok {
+    color: $success;
+    border: round $success;
+}
+
+.status-error {
+    color: $error;
+    border: round $error;
+}
+
+.install-guide {
+    color: $text-muted;
+    padding: 1 2;
+    margin-bottom: 1;
+}
+
+.info-text {
+    color: $text-muted;
+    padding: 0 1;
+    margin: 1 0;
+}

@@ -1,1 +1,63 @@
-/* settings screen styles */
+/* Settings screen styles */
+
+SettingsScreen {
+    align: center middle;
+}
+
+#settings-title {
+    text-style: bold;
+    text-align: center;
+    margin-bottom: 1;
+    color: $text;
+    width: 100%;
+}
+
+#settings-tabs {
+    height: 1fr;
+    margin: 0 2;
+}
+
+.settings-form {
+    padding: 1 2;
+    height: auto;
+}
+
+.field-label {
+    margin-top: 1;
+    margin-bottom: 0;
+    color: $text;
+    text-style: bold;
+}
+
+.settings-form Input {
+    margin-bottom: 1;
+}
+
+.settings-form Select {
+    margin-bottom: 1;
+}
+
+.switch-row {
+    height: 3;
+    margin: 1 0;
+}
+
+.switch-label {
+    padding-top: 1;
+    width: auto;
+    margin-right: 2;
+}
+
+.save-btn {
+    margin-top: 2;
+    width: auto;
+}
+
+.info-note {
+    color: $text-muted;
+    text-style: italic;
+    margin: 1 0;
+    padding: 1 2;
+    background: $surface;
+    border: round $primary-muted;
+}

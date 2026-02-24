@@ -78,23 +78,23 @@ class SettingsScreen(Screen):
             with TabPane("General", id="tab-general"):
                 with Vertical(classes="settings-form"):
                     yield Label(
-                        "Journal file path:",
+                        "Journal directory:",
                         classes="field-label",
                     )
                     yield Input(
-                        value=self._config.journal_path,
-                        placeholder="~/finances/main.journal",
-                        id="input-journal-path",
+                        value=str(self._config.journal_dir),
+                        placeholder="~/finances",
+                        id="input-journal-dir",
                     )
 
                     yield Label(
-                        "Data directory:",
+                        "Currency symbol:",
                         classes="field-label",
                     )
                     yield Input(
-                        value=self._config.data_dir,
-                        placeholder="(default: platform data dir)",
-                        id="input-data-dir",
+                        value=self._config.currency,
+                        placeholder="$",
+                        id="input-currency",
                     )
 
                     yield Label(
@@ -252,11 +252,11 @@ class SettingsScreen(Screen):
         self._config = AppConfig.load()
 
         try:
-            self.query_one("#input-journal-path", Input).value = (
-                self._config.journal_path
+            self.query_one("#input-journal-dir", Input).value = (
+                str(self._config.journal_dir)
             )
-            self.query_one("#input-data-dir", Input).value = (
-                self._config.data_dir
+            self.query_one("#input-currency", Input).value = (
+                self._config.currency
             )
             self.query_one("#select-fiscal-month", Select).value = (
                 self._config.fiscal_year_start
@@ -335,12 +335,18 @@ class SettingsScreen(Screen):
 
     def _save_general(self) -> None:
         """Save general settings."""
-        self._config.journal_path = (
-            self.query_one("#input-journal-path", Input).value.strip()
+        from pathlib import Path
+
+        journal_dir_str = (
+            self.query_one("#input-journal-dir", Input).value.strip()
         )
-        self._config.data_dir = (
-            self.query_one("#input-data-dir", Input).value.strip()
+        if journal_dir_str:
+            self._config.journal_dir = Path(journal_dir_str)
+        currency_str = (
+            self.query_one("#input-currency", Input).value.strip()
         )
+        if currency_str:
+            self._config.currency = currency_str
         fiscal_sel = self.query_one("#select-fiscal-month", Select)
         if fiscal_sel.value is not Select.BLANK:
             self._config.fiscal_year_start = int(fiscal_sel.value)

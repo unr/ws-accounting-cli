@@ -1,1 +1,83 @@
-/* transactions screen styles */
+/* Transactions screen styles */
+
+#txn-toolbar {
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 1;
+}
+
+#search-input {
+    width: 1fr;
+    margin-right: 1;
+}
+
+#status-filter {
+    width: 20;
+    margin-left: 1;
+}
+
+#review-badge {
+    width: auto;
+    padding: 0 1;
+    color: $warning;
+}
+
+#txn-content {
+    height: 1fr;
+    margin: 0 1;
+}
+
+#loading-indicator {
+    display: none;
+    align: center middle;
+    height: 1fr;
+}
+
+#empty-state {
+    display: none;
+    align: center middle;
+    text-align: center;
+    color: $text-muted;
+    padding: 4 8;
+    height: 1fr;
+}
+
+#txn-table {
+    height: 1fr;
+}
+
+#quick-add-bar {
+    height: auto;
+    padding: 0 1;
+    margin-top: 1;
+}
+
+#quick-add-input {
+    width: 1fr;
+    margin-right: 1;
+}
+
+#help-overlay {
+    display: none;
+    background: $surface;
+    border: round $primary;
+    padding: 1 2;
+    margin: 1;
+}
+
+/* Visibility toggle class -- used by Python code */
+#loading-indicator.visible {
+    display: block;
+}
+
+#empty-state.visible {
+    display: block;
+}
+
+#review-badge.visible {
+    display: block;
+}
+
+#help-overlay.visible {
+    display: block;
+}
