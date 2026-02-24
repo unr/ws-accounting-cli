@@ -75,6 +75,19 @@ AccountsScreen {
     color: $text-muted;
 }
 
+/* Empty state message */
+#accounts-empty-state {
+    display: none;
+    width: auto;
+    height: auto;
+    padding: 2 4;
+    border: round $panel;
+    text-align: center;
+    color: $text-muted;
+    margin: 4 auto;
+    content-align: center middle;
+}
+
 /* Placeholder screen styles shared across placeholders */
 .screen-placeholder {
     width: auto;

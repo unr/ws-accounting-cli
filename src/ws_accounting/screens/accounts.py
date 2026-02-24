@@ -74,6 +74,15 @@ class AccountsScreen(Screen):
                 )
                 yield Container(id="detail-txns")
 
+        # Empty state overlay (hidden when data exists)
+        yield Static(
+            "No accounts configured.\n\n"
+            "Import a CSV or add transactions to create accounts.\n"
+            "Use Ctrl+3 to open CSV Import.",
+            id="accounts-empty-state",
+            classes="muted-text",
+        )
+
     def on_mount(self) -> None:
         """Load account list when screen is mounted."""
         if self._gateway is not None:
@@ -96,20 +105,27 @@ class AccountsScreen(Screen):
     async def _fetch_accounts(self) -> None:
         """Fetch account list from hledger and populate the tree."""
         if self._gateway is None:
+            self._show_empty_state()
             return
 
         try:
             await self._gateway.check_installation()
         except (HLedgerNotFoundError, HLedgerError) as exc:
             log.warning("hledger not available: %s", exc)
+            self._show_empty_state()
             return
 
         try:
             accounts = await self._gateway.accounts()
             tree = self.query_one("#account-tree", AccountTree)
             tree.load_accounts(accounts)
+            if accounts:
+                self._hide_empty_state()
+            else:
+                self._show_empty_state()
         except Exception as exc:
             log.warning("Failed to load accounts: %s", exc)
+            self._show_empty_state()
 
     def on_account_tree_account_selected(
         self, event: AccountTree.AccountSelected
@@ -241,6 +257,26 @@ class AccountsScreen(Screen):
                     classes="muted-text",
                 )
             )
+
+    def _show_empty_state(self) -> None:
+        """Show the empty state message and hide the main layout."""
+        try:
+            empty = self.query_one("#accounts-empty-state")
+            empty.display = True
+            layout = self.query_one("#accounts-layout")
+            layout.display = False
+        except Exception:
+            pass
+
+    def _hide_empty_state(self) -> None:
+        """Hide the empty state message and show the main layout."""
+        try:
+            empty = self.query_one("#accounts-empty-state")
+            empty.display = False
+            layout = self.query_one("#accounts-layout")
+            layout.display = True
+        except Exception:
+            pass
 
     def on_button_pressed(
         self, event: Button.Pressed

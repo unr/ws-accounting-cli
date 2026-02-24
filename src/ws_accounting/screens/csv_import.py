@@ -756,6 +756,12 @@ class CSVImportScreen(Screen):
             self._transfer_candidates
         )
 
+        self.notify(
+            f"Imported {self._import_count} transactions"
+            f" ({self._dup_count} duplicates skipped).",
+            title="Import Complete",
+        )
+
         # Show summary
         self._populate_summary()
         self._go_to_step(3)

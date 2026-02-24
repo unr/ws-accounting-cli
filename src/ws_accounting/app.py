@@ -221,12 +221,30 @@ class WSAccountingApp(App):
         """Show help information."""
         self.notify(
             "Keyboard shortcuts:\n"
-            "  Ctrl+1-7: Navigate screens\n"
-            "  n: New transaction\n"
-            "  /: Search\n"
-            "  q: Quit",
-            title="Help",
-            timeout=8,
+            "\n"
+            "Navigation:\n"
+            "  Ctrl+1  Dashboard\n"
+            "  Ctrl+2  Transactions\n"
+            "  Ctrl+3  CSV Import\n"
+            "  Ctrl+4  Budgets\n"
+            "  Ctrl+5  Reports\n"
+            "  Ctrl+6  AI Insights\n"
+            "  Ctrl+7  Accounts\n"
+            "\n"
+            "Actions:\n"
+            "  n  New transaction\n"
+            "  /  Focus search bar\n"
+            "  ?  Show this help\n"
+            "  q  Quit application\n"
+            "\n"
+            "Transactions screen:\n"
+            "  j/k        Move down/up\n"
+            "  Enter      Open details\n"
+            "  Space      Toggle selection\n"
+            "  a          Mark as cleared\n"
+            "  r          Filter needs review",
+            title="Help -- Keyboard Shortcuts",
+            timeout=15,
         )
 
     def action_new_transaction(self) -> None:

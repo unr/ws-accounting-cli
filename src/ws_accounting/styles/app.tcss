@@ -45,10 +45,6 @@ Screen {
 }
 
 /* Screens with placeholder content get centered layout */
-TransactionsScreen,
-BudgetsScreen,
-ReportsScreen,
-InsightsScreen,
 SettingsScreen {
     align: center middle;
 }
